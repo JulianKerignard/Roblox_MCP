@@ -1,0 +1,46 @@
+{
+  "name": "mcp-roblox",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for Roblox development with Rojo",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "npx tsc",
+    "dev": "npx tsx watch mcp-server/index.ts",
+    "start": "node dist/index.js",
+    "rojo:init": "rojo init",
+    "rojo:serve": "rojo serve",
+    "rojo:build": "rojo build --output game.rbxlx",
+    "sync": "rojo serve isolated.project.json --port 34875",
+    "test": "jest",
+    "lint": "npx eslint mcp-server/",
+    "typecheck": "npx tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0",
+    "chokidar": "^3.5.0",
+    "fs-extra": "^11.2.0",
+    "glob": "^10.3.0",
+    "yaml": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/fs-extra": "^11.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "jest": "^29.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "roblox",
+    "rojo",
+    "model-context-protocol",
+    "luau",
+    "typescript"
+  ],
+  "author": "AI Developer",
+  "license": "MIT"
+}

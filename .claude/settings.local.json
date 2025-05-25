@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:spec.modelcontextprotocol.io)",
+      "WebFetch(domain:modelcontextprotocol.io)",
+      "WebFetch(domain:create.roblox.com)",
+      "Bash(npm run build:*)",
+      "Bash(timeout 5s npm start)",
+      "Bash(npm run sync:*)",
+      "Bash(grep:*)",
+      "Bash(npm start)",
+      "Bash(mkdir:*)",
+      "Bash(cat:*)",
+      "Bash(claude mcp add:*)",
+      "Bash(mv:*)",
+      "Bash(ls:*)"
+    ],
+    "deny": []
+  }
+}
