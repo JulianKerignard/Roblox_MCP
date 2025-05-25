@@ -1008,6 +1008,7 @@ local function OnScoreUpdate(newScore)
 end
 
 -- === INITIALISATION ===
+local function Initialize()
     -- Créer le GUI principal
     gui = Instance.new("ScreenGui")
     gui.Name = "GemCollectorGUI"
@@ -1025,25 +1026,19 @@ end
     
     local remotesFolder = ReplicatedStorage:WaitForChild("GemRemotes", 10)
     if remotesFolder then
-        print("✅ Dossier GemRemotes trouvé")
         local gemCollected = remotesFolder:WaitForChild("GemCollected", 5)
         local updateScore = remotesFolder:WaitForChild("UpdateScore", 5)
         
         if gemCollected and updateScore then
-            print("✅ RemoteEvents trouvés")
-            gemCollected.OnClientEvent:Connect(function(...)
-                print("💎 Event GemCollected reçu:", ...)
-                OnGemCollected(...)
-            end)
-            updateScore.OnClientEvent:Connect(function(...)
-                print("📊 Event UpdateScore reçu:", ...)
-                OnScoreUpdate(...)
-            end)
+            gemCollected.OnClientEvent:Connect(OnGemCollected)
+            updateScore.OnClientEvent:Connect(OnScoreUpdate)
         else
             warn("❌ RemoteEvents non trouvés")
         end
     else
         warn("❌ Dossier GemRemotes non trouvé")
+    end
+    
     -- Initialiser le système de sprint
     if player.Character then
         SprintController.Setup()
@@ -1073,4 +1068,3 @@ end
 
 -- Démarrer l'initialisation
 Initialize()
-print("✅ Interface client moderne initialisée!")
