@@ -1021,22 +1021,32 @@ local function Initialize()
     StaminaUI.Create()
     ShopUI.Create()
     
-    -- Attendre les RemoteEvents
-    task.wait(1)
+    -- Attendre les RemoteEvents avec plusieurs tentatives
+    task.wait(2) -- Attendre un peu plus longtemps que le serveur s'initialise
     
-    local remotesFolder = ReplicatedStorage:WaitForChild("GemRemotes", 10)
+    print("🔍 Recherche des RemoteEvents...")
+    local remotesFolder = ReplicatedStorage:WaitForChild("GemRemotes", 15) -- Attendre jusqu'à 15 secondes
     if remotesFolder then
+        print("✅ Dossier GemRemotes trouvé!")
         local gemCollected = remotesFolder:WaitForChild("GemCollected", 5)
         local updateScore = remotesFolder:WaitForChild("UpdateScore", 5)
         
         if gemCollected and updateScore then
+            print("✅ RemoteEvents connectés!")
             gemCollected.OnClientEvent:Connect(OnGemCollected)
             updateScore.OnClientEvent:Connect(OnScoreUpdate)
         else
-            warn("❌ RemoteEvents non trouvés")
+            warn("❌ RemoteEvents non trouvés dans le dossier")
+            print("  - GemCollected:", gemCollected)
+            print("  - UpdateScore:", updateScore)
         end
     else
-        warn("❌ Dossier GemRemotes non trouvé")
+        warn("❌ Dossier GemRemotes non trouvé après 15 secondes d'attente")
+        -- Lister ce qui est dans ReplicatedStorage pour déboguer
+        print("📂 Contenu de ReplicatedStorage:")
+        for _, child in pairs(ReplicatedStorage:GetChildren()) do
+            print("  -", child.Name, "(" .. child.ClassName .. ")")
+        end
     end
     
     -- Initialiser le système de sprint

@@ -4,8 +4,8 @@ local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- Charger le module GemSystem
-local GemSystem = require(ReplicatedStorage.Shared.GemSystem)
+-- Charger le module GemSystem avec WaitForChild
+local GemSystem = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GemSystem"))
 
 -- Variables
 local gemsFolder = nil
@@ -24,15 +24,20 @@ local function Initialize()
     
     
     -- Configurer les RemoteEvents
-    local success, result = pcall(function()
-        return GemSystem.SetupRemotes()
-    end)
-    
-    if success then
-        remotes = result
+    remotes = GemSystem.SetupRemotes()
+    if remotes then
         print("🎮 Collecteur de Gemmes initialisé!")
+        print("✅ RemoteEvents créés:")
+        print("  - GemCollected:", remotes.GemCollected)
+        print("  - UpdateScore:", remotes.UpdateScore)
+        local remotesFolder = ReplicatedStorage:FindFirstChild("GemRemotes")
+        if remotesFolder then
+            print("✅ Dossier GemRemotes trouvé dans ReplicatedStorage")
+        else
+            warn("❌ Dossier GemRemotes introuvable après création!")
+        end
     else
-        warn("⚠️ Erreur lors de l'initialisation des RemoteEvents:", result)
+        warn("⚠️ Erreur lors de l'initialisation des RemoteEvents")
     end
 end
 
@@ -98,6 +103,7 @@ local function CollectGem(gem, character)
                 print("📡 Envoi des événements au client")
                 remotes.GemCollected:FireClient(player, gemType.Value, points.Value)
                 remotes.UpdateScore:FireClient(player, gems.Value)
+            end
         end
     end
     
@@ -137,27 +143,45 @@ local function CollectGem(gem, character)
     Debris:AddItem(gem, 0.5)
 end
 
+end
+
+
+
+
+
+
+
 -- Faire apparaître une gemme
 local function SpawnGem()
+    -- Vérifier si gemsFolder existe
+    if not gemsFolder then
+        warn("❌ gemsFolder est nil!")
+        return
+    end
+    
     -- Choisir un type de gemme aléatoire
     local gemType = GemSystem.GetRandomGemType()
     print("🎲 Spawn d'une gemme:", gemType.name)
     
     -- Créer la gemme
     local gem = GemSystem.CreateGem(gemType)
-    gem.Position = GemSystem.GetRandomSpawnPosition()
+    if not gem then
+        warn("❌ Échec de création de la gemme!")
+        return
+    end
+    
+    local position = GemSystem.GetRandomSpawnPosition()
+    gem.Position = position
     gem.Parent = gemsFolder
-    print("📍 Position de la gemme:", gem.Position)
-    
-    -- Ajouter à la liste des gemmes actives
-    table.insert(activeGems, gem)
-    
-    -- Configurer la détection de collision
+    -- Configurer la détection de collision avec debounce
+    local debounce = false
     gem.Touched:Connect(function(hit)
+        if debounce then return end
         local character = hit.Parent
         if character and character:FindFirstChild("Humanoid") then
             -- Éviter les collections multiples
             if gem.Parent then
+                debounce = true
                 gem.Parent = nil
                 CollectGem(gem, character)
             end
@@ -195,9 +219,9 @@ local function AnimateGems()
         end
     end)
 end
-
--- Boucle de spawn des gemmes
 local function StartGemSpawning()
+    print("🚀 Début du spawn des gemmes...")
+    print("📊 Config: Interval =", GemSystem.Config.SpawnInterval, "| Lifetime =", GemSystem.Config.GemLifetime)
     while true do
         SpawnGem()
         task.wait(GemSystem.Config.SpawnInterval)

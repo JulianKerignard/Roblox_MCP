@@ -15,6 +15,7 @@ import yaml from "yaml";
 import { luauTemplates, getTemplate, getTemplatesByCategory, applyTemplate } from "./templates.js";
 import { detectAntiPatterns, getAntiPatternSuggestions } from "./antipatterns.js";
 import { robloxAPIs, commonTypes, getServiceAPI, searchAPIs } from "./roblox-apis.js";
+import { validateGameTool } from "./validate-game.js";
 
 interface PatchOperation {
   scriptPath: string;
@@ -81,6 +82,7 @@ class RojoMCPServer {
   private readonly MAX_ROLLBACK_ENTRIES = 5; // Limite pour économiser la mémoire
   private chainOfThoughtEnabled = false; // Active/désactive le chain-of-thought
   private thoughtHistory: ThoughtProcess[] = []; // Historique des réflexions
+  private autoValidateEnabled: boolean = true; // Validation automatique activée par défaut
   private tokenUsage: TokenUsage = {
     totalTokensUsed: 0,
     contextWindowUsed: 0,
@@ -463,6 +465,19 @@ class RojoMCPServer {
             },
           },
           {
+            name: "validate_game",
+            description: "Valide l'intégralité du projet Roblox (syntaxe, dépendances, sécurité, structure)",
+            inputSchema: {
+              type: "object",
+              properties: {
+                projectPath: {
+                  type: "string",
+                  description: "Chemin du projet à valider (par défaut: répertoire courant)",
+                },
+              },
+            },
+          },
+          {
             name: "roblox_api",
             description: "Affiche la documentation des APIs Roblox les plus utilisées",
             inputSchema: {
@@ -496,6 +511,20 @@ class RojoMCPServer {
                 },
               },
               required: ["query"],
+            },
+          },
+          {
+            name: "toggle_auto_validation",
+            description: "Active/désactive la validation automatique après modification de fichiers",
+            inputSchema: {
+              type: "object",
+              properties: {
+                enabled: {
+                  type: "boolean",
+                  description: "Activer (true) ou désactiver (false) la validation automatique",
+                },
+              },
+              required: ["enabled"],
             },
           },
           {
@@ -614,6 +643,19 @@ class RojoMCPServer {
               args?.autoFix as boolean
             );
 
+          case "validate_game":
+            const validationResult = await validateGameTool(
+              args?.projectPath as string || this.projectRoot
+            );
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: validationResult,
+                },
+              ],
+            };
+
           case "roblox_api":
             return this.getRobloxAPI(
               args?.service as string,
@@ -625,6 +667,18 @@ class RojoMCPServer {
               args?.query as string,
               args?.category as string
             );
+
+          case "toggle_auto_validation":
+            this.autoValidateEnabled = args?.enabled as boolean;
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `✅ Validation automatique ${this.autoValidateEnabled ? 'activée' : 'désactivée'}\n\n` +
+                        `Les fichiers seront ${this.autoValidateEnabled ? 'automatiquement validés' : 'modifiés sans validation'} après chaque modification.`,
+                },
+              ],
+            };
 
           case "toggle_chain_of_thought":
             return this.toggleChainOfThought(
@@ -791,7 +845,16 @@ class RojoMCPServer {
       // Mettre à jour la structure en mémoire
       await this.updateFile(scriptPath);
       
-      const responseText = `✅ **Script mis à jour avec succès**\n\n**Fichier:** \`${scriptPath}\`\n**Taille:** ${content.length} caractères\n**Lignes:** ${content.split('\n').length}${diffReport ? '\n\n' + diffReport : ''}`;
+      let responseText = `✅ **Script mis à jour avec succès**\n\n**Fichier:** \`${scriptPath}\`\n**Taille:** ${content.length} caractères\n**Lignes:** ${content.split('\n').length}${diffReport ? '\n\n' + diffReport : ''}`;
+      
+      // Validation automatique si activée
+      if (this.autoValidateEnabled) {
+        const validationResult = await this.performAutoValidation(scriptPath);
+        if (validationResult) {
+          responseText += '\n\n' + validationResult;
+        }
+      }
+      
       this.updateTokenUsage(responseText);
       
       return {
@@ -832,7 +895,16 @@ class RojoMCPServer {
       await fs.ensureDir(path.dirname(fullPath));
       await fs.writeFile(fullPath, content);
       
-      const responseText = `✅ **Script créé avec succès**\n\n**Fichier:** \`${scriptPath}\`\n**Type:** ${scriptType}\n**Taille:** ${content.length} caractères`;
+      let responseText = `✅ **Script créé avec succès**\n\n**Fichier:** \`${scriptPath}\`\n**Type:** ${scriptType}\n**Taille:** ${content.length} caractères`;
+      
+      // Validation automatique si activée
+      if (this.autoValidateEnabled) {
+        const validationResult = await this.performAutoValidation(scriptPath);
+        if (validationResult) {
+          responseText += '\n\n' + validationResult;
+        }
+      }
+      
       this.updateTokenUsage(responseText);
       
       return {
@@ -2412,6 +2484,75 @@ class RojoMCPServer {
       };
     } catch (error) {
       throw new Error(`Impossible de prévisualiser le patch: ${error}`);
+    }
+  }
+
+  private async performAutoValidation(scriptPath: string): Promise<string | null> {
+    try {
+      // Utiliser uniquement une validation rapide du fichier modifié
+      const fullPath = path.join(this.projectRoot, scriptPath);
+      const content = await fs.readFile(fullPath, 'utf-8');
+      const lines = content.split('\n');
+      
+      let errors: string[] = [];
+      let warnings: string[] = [];
+      
+      // Validation syntaxique rapide
+      let blockStack: string[] = [];
+      const blockStarters = ['function', 'if', 'for', 'while', 'repeat', 'do'];
+      
+      lines.forEach((line, index) => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('--')) return;
+        
+        // Vérifier les blocs
+        for (const starter of blockStarters) {
+          if (trimmed.startsWith(starter + ' ') || trimmed.startsWith(starter + '(')) {
+            blockStack.push(starter);
+          }
+        }
+        
+        if (trimmed === 'end' || trimmed.startsWith('end ') || trimmed.startsWith('end;')) {
+          if (blockStack.length === 0) {
+            errors.push(`Ligne ${index + 1}: 'end' sans bloc correspondant`);
+          } else {
+            blockStack.pop();
+          }
+        }
+        
+        // Vérifier les patterns dangereux
+        if (/\bwait\s*\(/.test(line) && !trimmed.startsWith('--')) {
+          warnings.push(`Ligne ${index + 1}: Utiliser task.wait() au lieu de wait()`);
+        }
+      });
+      
+      if (blockStack.length > 0) {
+        errors.push(`${blockStack.length} bloc(s) non fermé(s): ${blockStack.join(', ')}`);
+      }
+      
+      // Générer le rapport si des problèmes sont trouvés
+      if (errors.length > 0 || warnings.length > 0) {
+        let report = '📋 **Auto-validation:**\n';
+        
+        if (errors.length > 0) {
+          report += `\n❌ **Erreurs (${errors.length}):**\n`;
+          errors.forEach(err => report += `- ${err}\n`);
+        }
+        
+        if (warnings.length > 0) {
+          report += `\n⚠️  **Avertissements (${warnings.length}):**\n`;
+          warnings.forEach(warn => report += `- ${warn}\n`);
+        }
+        
+        return report;
+      }
+      
+      return null; // Pas de problèmes
+      
+    } catch (error) {
+      // Si la validation échoue, ne pas bloquer l'opération
+      console.error('Erreur lors de la validation automatique:', error);
+      return null;
     }
   }
 
