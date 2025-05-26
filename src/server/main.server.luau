@@ -15,7 +15,7 @@ local activeGems = {}
 -- Initialisation
 local function Initialize()
     -- Créer le dossier pour les gemmes
-    gemsFolder = workspace:FindFirstChild("GemsFolder")
+    -- Créer le dossier pour les gemmes
     if not gemsFolder then
         gemsFolder = Instance.new("Folder")
         gemsFolder.Name = "GemsFolder"
@@ -130,6 +130,7 @@ local function CollectGem(gem, character)
             end
         end
         return nil
+end
     end
     
     local particleEmitter = findParticleEmitter(gem)
@@ -142,14 +143,6 @@ local function CollectGem(gem, character)
     gem.CanCollide = false
     Debris:AddItem(gem, 0.5)
 end
-
-end
-
-
-
-
-
-
 
 -- Faire apparaître une gemme
 local function SpawnGem()
@@ -191,15 +184,9 @@ local function SpawnGem()
     -- Supprimer automatiquement après un certain temps
     Debris:AddItem(gem, GemSystem.Config.GemLifetime)
     
-    -- Retirer de la liste active après expiration
-    task.delay(GemSystem.Config.GemLifetime, function()
-        for i, activeGem in ipairs(activeGems) do
-            if activeGem == gem then
-                table.remove(activeGems, i)
-                break
-            end
-        end
-    end)
+    
+    -- Ajouter la gemme à la liste active
+    table.insert(activeGems, gem)
 end
 
 -- Animation des gemmes (rotation et flottement)

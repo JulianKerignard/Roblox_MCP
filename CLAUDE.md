@@ -2,6 +2,34 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🔴 MANDATORY WORKFLOW - ALWAYS SEARCH FIRST!
+
+### ⚠️ CRITICAL RULE FOR CLAUDE ⚠️
+**YOU MUST SEARCH BEFORE WRITING ANY CODE!**
+
+**BEFORE making ANY code changes, you MUST:**
+
+1. **Use `search_in_scripts`** to find relevant code patterns
+2. **Use `read_script`** to understand the full context
+3. **Use `get_project_structure`** to see all files
+
+**NEVER** write or modify code without searching first!
+
+### Example Workflow:
+```
+User: "Add a jump boost to the player"
+
+❌ WRONG: Immediately write code
+✅ CORRECT: 
+1. search_in_scripts("JumpPower")
+2. search_in_scripts("Humanoid") 
+3. read_script("src/server/main.server.luau")
+4. THEN write informed code
+```
+
+### 🚨 SEARCH IS MANDATORY - NO EXCEPTIONS! 🚨
+If you write code without searching first, you are violating the core principle of this MCP server. The search tools exist to prevent errors and ensure code quality.
+
 ## Project Overview
 
 MCP-Roblox is a Model Context Protocol (MCP) server that enables Claude to interact with Roblox projects using **Rojo** for modern Luau development. The server provides real-time file watching, script management, and seamless integration between Claude and Roblox Studio.
@@ -126,6 +154,27 @@ The MCP server uses chokidar to watch `src/**/*.{luau,lua}` and:
 - MCP server provides file system interface, Rojo handles Studio sync
 - Use `.luau` extension for all new scripts
 - Follow Rojo naming conventions for proper script type detection
+
+## 🔍 SEARCH PATTERNS FOR COMMON TASKS
+
+When user asks about specific features, ALWAYS search first:
+
+### Player-related:
+- "change player speed" → `search_in_scripts("WalkSpeed|Humanoid")`
+- "player data" → `search_in_scripts("leaderstats|PlayerAdded")`
+- "player GUI" → `search_in_scripts("PlayerGui|ScreenGui")`
+
+### Game mechanics:
+- "shop system" → `search_in_scripts("shop|purchase|buy")`
+- "inventory" → `search_in_scripts("inventory|items|backpack")`
+- "currency/coins" → `search_in_scripts("coins|gems|currency|money")`
+
+### Events:
+- "when player joins" → `search_in_scripts("PlayerAdded")`
+- "on touch" → `search_in_scripts("Touched|.Touched")`
+- "remote events" → `search_in_scripts("RemoteEvent|FireClient|FireServer")`
+
+### ALWAYS check existing code before creating new features!
 
 ## Anti-Pattern Detection
 

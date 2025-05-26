@@ -184,10 +184,10 @@ function TrailSystem.EnableTrail(player, trailType)
     
     -- Effet d'activation avec animation
     if trail and TrailSystem.Config.EnableGlow then
-        spawn(function()
+        task.spawn(function()
             for i = 0, 5 do
                 trail.LightEmission = 0.5 + (math.sin(i) * 0.3)
-                wait(0.1)
+                task.wait(0.1)
             end
             trail.LightEmission = 0.5
         end)

@@ -83,6 +83,8 @@ class RojoMCPServer {
   private chainOfThoughtEnabled = false; // Active/désactive le chain-of-thought
   private thoughtHistory: ThoughtProcess[] = []; // Historique des réflexions
   private autoValidateEnabled: boolean = true; // Validation automatique activée par défaut
+  private searchBeforeWriteEnabled: boolean = true; // Force la recherche avant écriture
+  private lastSearchTimestamp: number = 0; // Timestamp de la dernière recherche
   private tokenUsage: TokenUsage = {
     totalTokensUsed: 0,
     contextWindowUsed: 0,
@@ -2497,37 +2499,99 @@ class RojoMCPServer {
       let errors: string[] = [];
       let warnings: string[] = [];
       
-      // Validation syntaxique rapide
+      // Validation syntaxique rapide mais plus robuste
       let blockStack: string[] = [];
-      const blockStarters = ['function', 'if', 'for', 'while', 'repeat', 'do'];
+      let bracketStack: string[] = [];
+      let inString = false;
+      let stringChar = '';
       
       lines.forEach((line, index) => {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('--')) return;
+        let i = 0;
+        let inComment = false;
         
-        // Vérifier les blocs
-        for (const starter of blockStarters) {
-          if (trimmed.startsWith(starter + ' ') || trimmed.startsWith(starter + '(')) {
-            blockStack.push(starter);
+        // Analyse caractère par caractère
+        while (i < line.length) {
+          const char = line[i];
+          const nextChar = line[i + 1];
+          
+          // Détecter les commentaires
+          if (!inString && char === '-' && nextChar === '-') {
+            inComment = true;
+            break;
+          }
+          
+          // Gérer les strings
+          if (!inComment && (char === '"' || char === "'") && (i === 0 || line[i-1] !== '\\')) {
+            if (!inString) {
+              inString = true;
+              stringChar = char;
+            } else if (char === stringChar) {
+              inString = false;
+            }
+          }
+          
+          // Vérifier les brackets hors strings
+          if (!inString && !inComment) {
+            if (char === '(' || char === '{' || char === '[') {
+              bracketStack.push(char);
+            } else if (char === ')' || char === '}' || char === ']') {
+              const expected = char === ')' ? '(' : char === '}' ? '{' : '[';
+              if (bracketStack.length === 0 || bracketStack[bracketStack.length - 1] !== expected) {
+                errors.push(`Ligne ${index + 1}: '${char}' sans '${expected}' correspondant`);
+              } else {
+                bracketStack.pop();
+              }
+            }
+          }
+          
+          i++;
+        }
+        
+        // Analyser les mots-clés de bloc (hors strings et commentaires)
+        if (!inComment && !inString) {
+          const trimmed = line.trim();
+          
+          // Détecter les débuts de blocs
+          if (/\b(function|if|for|while|repeat|do)\b/.test(trimmed)) {
+            if (!trimmed.includes(' end') && !trimmed.includes(' return') && !trimmed.includes(' break')) {
+              blockStack.push('block');
+            }
+          }
+          
+          // Détecter les 'then' qui nécessitent un 'end'
+          if (/\bthen\b/.test(trimmed) && !trimmed.includes('then return') && !trimmed.includes('then break')) {
+            blockStack.push('then');
+          }
+          
+          // Détecter les 'end'
+          if (/\bend\b/.test(trimmed)) {
+            if (blockStack.length === 0) {
+              errors.push(`Ligne ${index + 1}: 'end' sans bloc correspondant`);
+            } else {
+              blockStack.pop();
+            }
+          }
+          
+          // Vérifier les patterns dangereux
+          if (/\bwait\s*\(/.test(trimmed)) {
+            warnings.push(`Ligne ${index + 1}: Utiliser task.wait() au lieu de wait()`);
           }
         }
         
-        if (trimmed === 'end' || trimmed.startsWith('end ') || trimmed.startsWith('end;')) {
-          if (blockStack.length === 0) {
-            errors.push(`Ligne ${index + 1}: 'end' sans bloc correspondant`);
-          } else {
-            blockStack.pop();
-          }
-        }
-        
-        // Vérifier les patterns dangereux
-        if (/\bwait\s*\(/.test(line) && !trimmed.startsWith('--')) {
-          warnings.push(`Ligne ${index + 1}: Utiliser task.wait() au lieu de wait()`);
+        // Réinitialiser l'état string à la fin de chaque ligne si non fermée (erreur)
+        if (inString) {
+          errors.push(`Ligne ${index + 1}: String non fermée`);
+          inString = false;
         }
       });
       
+      // Vérifications finales
       if (blockStack.length > 0) {
-        errors.push(`${blockStack.length} bloc(s) non fermé(s): ${blockStack.join(', ')}`);
+        errors.push(`${blockStack.length} bloc(s) non fermé(s)`);
+      }
+      
+      if (bracketStack.length > 0) {
+        errors.push(`${bracketStack.length} parenthèse(s)/accolade(s) non fermée(s)`);
       }
       
       // Générer le rapport si des problèmes sont trouvés

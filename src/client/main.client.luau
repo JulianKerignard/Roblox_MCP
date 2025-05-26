@@ -410,6 +410,7 @@ function StaminaUI.Update()
             BackgroundColor3 = color
         }):Play()
     end
+    end
 end
 
 -- === MODULE NOTIFICATIONS ===
@@ -503,6 +504,7 @@ function NotificationSystem.Create(text, icon, color, duration)
     end
     
     notification:Destroy()
+end
 end
 
 -- === MODULE BOUTIQUE ===
