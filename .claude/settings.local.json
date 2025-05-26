@@ -24,7 +24,12 @@
       "Bash(luac:*)",
       "Bash(done)",
       "Bash(rg:*)",
-      "Bash(awk:*)"
+      "Bash(awk:*)",
+      "Bash(npm install:*)",
+      "Bash(npm test:*)",
+      "Bash(node:*)",
+      "Bash(find:*)",
+      "Bash(timeout:*)"
     ],
     "deny": []
   }

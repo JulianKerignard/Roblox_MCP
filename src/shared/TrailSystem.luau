@@ -32,22 +32,74 @@ TrailSystem.Config = {
         Default = {
             StartColor = Color3.fromRGB(100, 200, 255),
             EndColor = Color3.fromRGB(50, 100, 200),
-            Texture = nil
+            Texture = nil,
+            LightEmission = 0.5
         },
         Fire = {
             StartColor = Color3.fromRGB(255, 100, 0),
             EndColor = Color3.fromRGB(255, 200, 0),
-            Texture = "rbxasset://textures/particles/fire_main.dds"
+            Texture = "rbxasset://textures/particles/fire_main.dds",
+            LightEmission = 1
         },
         Electric = {
             StartColor = Color3.fromRGB(255, 255, 100),
             EndColor = Color3.fromRGB(100, 100, 255),
-            Texture = "rbxasset://textures/particles/sparkles_main.dds"
+            Texture = "rbxasset://textures/particles/sparkles_main.dds",
+            LightEmission = 1
         },
         Magic = {
             StartColor = Color3.fromRGB(255, 100, 255),
             EndColor = Color3.fromRGB(100, 255, 255),
-            Texture = nil
+            Texture = nil,
+            LightEmission = 0.8
+        },
+        Rainbow = {
+            StartColor = Color3.fromRGB(255, 0, 0),     -- Rouge
+            EndColor = Color3.fromRGB(255, 0, 255),      -- Violet
+            Texture = nil,
+            LightEmission = 0.9
+        },
+        Lightning = {
+            StartColor = Color3.fromRGB(255, 255, 255),  -- Blanc pur
+            EndColor = Color3.fromRGB(100, 200, 255),    -- Bleu électrique
+            Texture = "rbxasset://textures/particles/sparkles_main.dds",
+            LightEmission = 1
+        },
+        Galaxy = {
+            StartColor = Color3.fromRGB(100, 0, 200),    -- Violet foncé
+            EndColor = Color3.fromRGB(200, 100, 255),    -- Violet clair
+            Texture = "rbxasset://textures/particles/sparkles_main.dds",
+            LightEmission = 0.7
+        },
+        Ice = {
+            StartColor = Color3.fromRGB(200, 240, 255),  -- Bleu glacé
+            EndColor = Color3.fromRGB(150, 200, 255),    -- Bleu clair
+            Texture = nil,
+            LightEmission = 0.3
+        },
+        Shadow = {
+            StartColor = Color3.fromRGB(50, 0, 50),      -- Violet très foncé
+            EndColor = Color3.fromRGB(0, 0, 0),          -- Noir
+            Texture = nil,
+            LightEmission = 0
+        },
+        Neon = {
+            StartColor = Color3.fromRGB(0, 255, 255),    -- Cyan
+            EndColor = Color3.fromRGB(255, 0, 255),      -- Magenta
+            Texture = nil,
+            LightEmission = 1
+        },
+        Nature = {
+            StartColor = Color3.fromRGB(100, 255, 100),  -- Vert clair
+            EndColor = Color3.fromRGB(0, 150, 0),        -- Vert foncé
+            Texture = nil,
+            LightEmission = 0.4
+        },
+        Gold = {
+            StartColor = Color3.fromRGB(255, 215, 0),    -- Or
+            EndColor = Color3.fromRGB(255, 180, 0),      -- Or foncé
+            Texture = nil,
+            LightEmission = 0.6
         }
     }
 }

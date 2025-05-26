@@ -20,6 +20,11 @@ import { compileCheckTool } from "./compile-check.js";
 import { patchTemplates, syntaxHints, countSyntaxElements, validateSyntaxBalance, suggestSyntaxFixes } from "./patch-templates.js";
 import { SYNTAX_RULES, validatePatchBeforeApply, getSyntaxReminder, checkWorkflowCompliance } from "./syntax-rules.js";
 import { analyzeError, generateErrorAnalysisReport, validateApproach, ERROR_PATTERNS } from "./error-handler.js";
+import { syntaxValidator } from "./syntax-validator.js";
+import { hookManager } from "./modification-hooks.js";
+import { syntaxEnforcer } from "./src/validation/syntax-enforcer.js";
+import { syntaxRulesInjector } from "./src/middleware/syntax-rules-injector.js";
+import { syntaxHelperTool } from "./src/tools/syntax-helper-tool.js";
 
 interface PatchOperation {
   scriptPath: string;
@@ -215,8 +220,8 @@ class RojoMCPServer {
 
   private setupHandlers() {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      return {
-        tools: [
+      // Créer la liste des outils de base
+      let tools: Tool[] = [
           {
             name: "get_project_structure",
             description: "Obtient la structure complète du projet Rojo",
@@ -628,8 +633,12 @@ class RojoMCPServer {
               required: ["errorMessage"],
             },
           },
-        ] as Tool[],
-      };
+        ] as Tool[];
+        
+      // Injecter les règles de syntaxe et améliorer les outils
+      tools = syntaxRulesInjector.injectInToolsList(tools);
+      
+      return { tools };
     });
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -797,7 +806,8 @@ class RojoMCPServer {
               args?.action as string,
               args?.scriptPath as string,
               args?.templateName as string,
-              args?.errorMessage as string
+              args?.errorMessage as string,
+              args
             );
 
           case "analyze_error":
@@ -948,22 +958,79 @@ class RojoMCPServer {
       const fullPath = path.join(this.projectRoot, scriptPath);
       const fileInfo = this.projectStructure.get(scriptPath);
       
+      // NOUVEAU: Exécuter les hooks de validation AVANT l'écriture
+      const hookResult = await hookManager.executeHooks({
+        operation: 'write',
+        filePath: scriptPath,
+        originalContent: fileInfo?.content || '',
+        newContent: content
+      });
+
+      // Si la validation échoue, bloquer l'opération
+      if (!hookResult.approved) {
+        let errorMsg = `❌ **Validation échouée - Écriture bloquée**\n\n`;
+        errorMsg += `**Fichier:** \`${scriptPath}\`\n\n`;
+        
+        if (hookResult.errors && hookResult.errors.length > 0) {
+          errorMsg += `**🚨 Erreurs critiques:**\n`;
+          hookResult.errors.forEach(err => errorMsg += `- ${err}\n`);
+          errorMsg += `\n`;
+        }
+        
+        if (hookResult.warnings && hookResult.warnings.length > 0) {
+          errorMsg += `**⚠️ Avertissements:**\n`;
+          hookResult.warnings.forEach(warn => errorMsg += `- ${warn}\n`);
+          errorMsg += `\n`;
+        }
+        
+        if (hookResult.suggestions && hookResult.suggestions.length > 0) {
+          errorMsg += `**💡 Suggestions:**\n`;
+          hookResult.suggestions.forEach(sug => errorMsg += `- ${sug}\n`);
+          errorMsg += `\n`;
+        }
+        
+        errorMsg += `\n**📋 Actions requises:**\n`;
+        errorMsg += `1. Corrigez les erreurs de syntaxe ci-dessus\n`;
+        errorMsg += `2. Assurez-vous que tous les blocs sont fermés (chaque 'function', 'if', 'for' doit avoir son 'end')\n`;
+        errorMsg += `3. Vérifiez l'équilibre des parenthèses et accolades\n`;
+        errorMsg += `4. Réessayez l'écriture après correction\n`;
+        
+        this.updateTokenUsage(errorMsg);
+        return {
+          content: [
+            {
+              type: "text",
+              text: errorMsg + this.appendTokenUsageReport(),
+            },
+          ],
+        };
+      }
+
+      // Utiliser le contenu potentiellement modifié par les hooks
+      const finalContent = hookResult.modifiedContent || content;
+      
       // Générer le diff si l'ancien contenu existe et que useDiff est activé
       let diffReport = '';
       if (fileInfo && useDiff) {
-        diffReport = this.generateDiff(fileInfo.content, content);
+        diffReport = this.generateDiff(fileInfo.content, finalContent);
         
         // Sauvegarder dans l'historique de rollback (OPTIMISÉ)
-        this.saveRollbackEntry(scriptPath, fileInfo.content, content);
+        this.saveRollbackEntry(scriptPath, fileInfo.content, finalContent);
       }
       
       await fs.ensureDir(path.dirname(fullPath));
-      await fs.writeFile(fullPath, content);
+      await fs.writeFile(fullPath, finalContent);
       
       // Mettre à jour la structure en mémoire
       await this.updateFile(scriptPath);
       
-      let responseText = `✅ **Script mis à jour avec succès**\n\n**Fichier:** \`${scriptPath}\`\n**Taille:** ${content.length} caractères\n**Lignes:** ${content.split('\n').length}${diffReport ? '\n\n' + diffReport : ''}`;
+      let responseText = `✅ **Script mis à jour avec succès**\n\n**Fichier:** \`${scriptPath}\`\n**Taille:** ${finalContent.length} caractères\n**Lignes:** ${finalContent.split('\n').length}${diffReport ? '\n\n' + diffReport : ''}`;
+      
+      // Ajouter les avertissements s'il y en a
+      if (hookResult.warnings && hookResult.warnings.length > 0) {
+        responseText += `\n\n**⚠️ Avertissements détectés:**\n`;
+        hookResult.warnings.forEach(warn => responseText += `- ${warn}\n`);
+      }
       
       // Validation automatique si activée
       if (this.autoValidateEnabled) {
@@ -1010,8 +1077,37 @@ class RojoMCPServer {
                  "-- Module\nlocal Module = {}\n\nreturn Module";
       }
 
+      // NOUVEAU: Valider le contenu avant création
+      const hookResult = await hookManager.executeHooks({
+        operation: 'create',
+        filePath: scriptPath,
+        newContent: content
+      });
+
+      if (!hookResult.approved) {
+        let errorMsg = `❌ **Validation échouée - Création bloquée**\n\n`;
+        errorMsg += `**Fichier:** \`${scriptPath}\`\n\n`;
+        
+        if (hookResult.errors && hookResult.errors.length > 0) {
+          errorMsg += `**🚨 Erreurs:**\n`;
+          hookResult.errors.forEach(err => errorMsg += `- ${err}\n`);
+        }
+        
+        this.updateTokenUsage(errorMsg);
+        return {
+          content: [
+            {
+              type: "text",
+              text: errorMsg + this.appendTokenUsageReport(),
+            },
+          ],
+        };
+      }
+
+      const finalContent = hookResult.modifiedContent || content;
+
       await fs.ensureDir(path.dirname(fullPath));
-      await fs.writeFile(fullPath, content);
+      await fs.writeFile(fullPath, finalContent);
       
       let responseText = `✅ **Script créé avec succès**\n\n**Fichier:** \`${scriptPath}\`\n**Type:** ${scriptType}\n**Taille:** ${content.length} caractères`;
       
@@ -1179,28 +1275,56 @@ class RojoMCPServer {
         throw new Error(`Numéro de ligne invalide: ${patch.lineStart} (fichier a ${lines.length} lignes)`);
       }
 
-      // Valider le patch AVANT de l'appliquer
-      if (patch.newContent) {
-        const validation = validatePatchBeforeApply(
-          content,
-          patch.newContent,
-          patch.operation,
-          patch.lineStart,
-          patch.lineEnd
-        );
+      // NOUVEAU: Valider le patch avec les hooks AVANT application
+      const currentContent = content;
+      const validationResult = await hookManager.validatePatch(currentContent, patch);
+      
+      if (!validationResult.approved) {
+        let errorMsg = `❌ **Validation échouée - Patch bloqué**\n\n`;
+        errorMsg += `**Fichier:** \`${patch.scriptPath}\`\n`;
+        errorMsg += `**Opération:** ${patch.operation}\n`;
+        errorMsg += `**Lignes affectées:** ${patch.lineStart}${patch.lineEnd ? `-${patch.lineEnd}` : ''}\n\n`;
         
-        if (!validation.valid && this.autoValidateEnabled) {
-          let errorMsg = `⚠️ **Validation du patch échouée**\n\n`;
-          errorMsg += `**Avertissements:**\n`;
-          validation.warnings.forEach(w => errorMsg += `- ${w}\n`);
-          errorMsg += `\n**Suggestions:**\n`;
-          validation.suggestions.forEach(s => errorMsg += `- ${s}\n`);
-          errorMsg += `\n💡 Utilisez 'syntax_helper' pour obtenir des templates corrects.`;
-          errorMsg += `\n📝 Utilisez 'preview_patch' pour vérifier avant d'appliquer.`;
-          
-          // On continue quand même mais on affiche l'avertissement
-          console.error(errorMsg);
+        if (validationResult.errors && validationResult.errors.length > 0) {
+          errorMsg += `**🚨 Erreurs critiques:**\n`;
+          validationResult.errors.forEach(err => errorMsg += `- ${err}\n`);
+          errorMsg += `\n`;
         }
+        
+        if (validationResult.warnings && validationResult.warnings.length > 0) {
+          errorMsg += `**⚠️ Avertissements:**\n`;
+          validationResult.warnings.forEach(warn => errorMsg += `- ${warn}\n`);
+          errorMsg += `\n`;
+        }
+        
+        if (validationResult.suggestions && validationResult.suggestions.length > 0) {
+          errorMsg += `**💡 Suggestions:**\n`;
+          validationResult.suggestions.forEach(sug => errorMsg += `- ${sug}\n`);
+          errorMsg += `\n`;
+        }
+        
+        // Afficher un aperçu du code problématique
+        if (patch.newContent) {
+          errorMsg += `**📝 Code soumis:**\n\`\`\`luau\n${patch.newContent}\n\`\`\`\n\n`;
+        }
+        
+        errorMsg += `**📋 Actions requises:**\n`;
+        errorMsg += `1. Corrigez les erreurs de syntaxe dans le contenu du patch\n`;
+        errorMsg += `2. Assurez-vous que le patch maintient l'équilibre des blocs\n`;
+        errorMsg += `3. Utilisez 'preview_patch' pour tester avant d'appliquer\n`;
+        errorMsg += `4. Réessayez avec un patch corrigé\n\n`;
+        errorMsg += `💡 Utilisez 'syntax_helper' pour obtenir des templates corrects.\n`;
+        errorMsg += `📝 Utilisez 'preview_patch' pour vérifier avant d'appliquer.`;
+        
+        this.updateTokenUsage(errorMsg);
+        return {
+          content: [
+            {
+              type: "text",
+              text: errorMsg + this.appendTokenUsageReport(),
+            },
+          ],
+        };
       }
 
       // Effectuer l'opération
@@ -2776,7 +2900,8 @@ class RojoMCPServer {
     action: string,
     scriptPath?: string,
     templateName?: string,
-    errorMessage?: string
+    errorMessage?: string,
+    args?: any
   ) {
     let responseText = "";
     const compliance = checkWorkflowCompliance(this.toolHistory, 'syntax_helper');
@@ -2871,10 +2996,46 @@ class RojoMCPServer {
             suggestions.forEach(suggestion => {
               responseText += `- ${suggestion}\n`;
             });
-          } else {
-            responseText += "Aucune suggestion spécifique pour cette erreur.\n";
           }
+          break;
+
+        // NOUVELLES ACTIONS AVEC LE SYSTÈME DE VALIDATION OBLIGATOIRE
+        case "check":
+          if (!scriptPath) {
+            throw new Error("scriptPath requis pour check");
+          }
+          responseText = await syntaxHelperTool({ 
+            action: 'check', 
+            scriptPath 
+          }, this.projectRoot);
+          break;
           
+        case "find_unclosed":
+          if (!scriptPath) {
+            throw new Error("scriptPath requis pour find_unclosed");
+          }
+          responseText = await syntaxHelperTool({ 
+            action: 'find_unclosed', 
+            scriptPath 
+          }, this.projectRoot);
+          break;
+          
+        case "preview":
+          const previewContent = args?.content as string;
+          if (!previewContent) {
+            throw new Error("content requis pour preview");
+          }
+          responseText = await syntaxHelperTool({ 
+            action: 'preview', 
+            content: previewContent 
+          }, this.projectRoot);
+          break;
+          
+        case "show_rules":
+          responseText = await syntaxHelperTool({ 
+            action: 'show_rules' 
+          }, this.projectRoot);
+          break;
           // Ajouter des conseils généraux
           responseText += "\n**Conseils généraux:**\n";
           responseText += "- Utilisez `read_script` pour voir le fichier complet\n";

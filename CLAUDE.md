@@ -30,16 +30,72 @@ User: "Add a jump boost to the player"
 ### 🚨 SEARCH IS MANDATORY - NO EXCEPTIONS! 🚨
 If you write code without searching first, you are violating the core principle of this MCP server. The search tools exist to prevent errors and ensure code quality.
 
+## 🛤️ PATH RULES - ALWAYS USE FORWARD SLASHES
+
+### ⚠️ CRITICAL: File paths MUST use forward slashes (/)
+**NEVER use backslashes (\\) in file paths!**
+
+❌ **WRONG:**
+```
+src\client\main.client.luau
+src\\server\\main.server.luau
+```
+
+✅ **CORRECT:**
+```
+src/client/main.client.luau
+src/server/main.server.luau
+```
+
+**The system will auto-correct paths, but using forward slashes prevents errors.**
+
 ## 🛠️ PATCH AND EDIT BEST PRACTICES
 
-### ⚠️ CRITICAL RULES FOR PATCHES ⚠️
-**To avoid syntax errors when patching code:**
+### 🛑 SYSTÈME DE VALIDATION SYNTAXIQUE OBLIGATOIRE 🛑
+**❌ TOUTES LES MODIFICATIONS SONT AUTOMATIQUEMENT BLOQUÉES SI LA SYNTAXE EST INVALIDE! ❌**
 
-1. **ALWAYS read the ENTIRE file first** - Use `read_script()` to see full context
-2. **Count brackets and 'end' statements** - Every `function`, `if`, `for`, `while` needs its `end`
-3. **Use `preview_patch` FIRST** - Preview changes before applying
-4. **Check surrounding code** - Look 10 lines above/below your edit location
-5. **Validate after patching** - Use `validate_game` after modifications
+### 🚨 RÈGLES CRITIQUES - AUCUNE EXCEPTION! 🚨
+
+#### 1. **AVANT CHAQUE MODIFICATION, VOUS DEVEZ:**
+   - ✅ Utiliser `read_script()` pour lire le fichier COMPLET
+   - ✅ Compter TOUS les blocs ouverts (`function`, `if`, `for`, `while`, `do`)
+   - ✅ Compter TOUS les `end` correspondants
+   - ✅ Utiliser `preview_patch` pour vérifier votre modification
+   - ✅ Vérifier que chaque bloc ouvert a son `end`
+
+#### 2. **CE QUI BLOQUERA AUTOMATIQUEMENT VOS MODIFICATIONS:**
+   - ❌ **Blocs non fermés** - Il manque un ou plusieurs `end`
+   - ❌ **`end` en trop** - Plus de `end` que de blocs ouverts
+   - ❌ **Parenthèses déséquilibrées** - `(` sans `)` correspondant
+   - ❌ **Accolades déséquilibrées** - `{` sans `}` correspondant
+   - ❌ **Crochets déséquilibrés** - `[` sans `]` correspondant
+
+#### 3. **ERREUR LA PLUS FRÉQUENTE DE CLAUDE:**
+   ```luau
+   -- ❌ ERREUR TYPIQUE DE CLAUDE:
+   function doSomething()
+       if condition then
+           -- code
+       end
+   -- OUBLI DU 'end' DE LA FONCTION!
+   
+   -- ✅ VERSION CORRECTE:
+   function doSomething()
+       if condition then
+           -- code
+       end
+   end  -- N'OUBLIEZ JAMAIS CE 'end'!
+   ```
+
+#### 4. **VALIDATION EN TEMPS RÉEL:**
+   - Le système compte automatiquement les blocs et les `end`
+   - Si le compte ne correspond pas, la modification est BLOQUÉE
+   - Un message d'erreur détaillé vous indiquera:
+     - Combien de `end` sont attendus
+     - Combien de `end` ont été trouvés
+     - Quels blocs ne sont pas fermés et à quelle ligne
+
+### 🚫 MODIFICATIONS QUI SERONT REJETÉES:
 
 ### Common Luau Syntax Rules:
 ```luau
@@ -68,6 +124,14 @@ local module = {
 }
 ```
 
+### 🎚️ SYSTÈME DE HOOKS DE VALIDATION:
+Le MCP utilise maintenant un système de hooks qui:
+1. **Vérifie AUTOMATIQUEMENT** la syntaxe avant chaque modification
+2. **BLOQUE** les modifications si des erreurs sont détectées
+3. **SUGGÈRE** des corrections spécifiques
+4. **FORMATE** automatiquement le code (espaces, virgules, etc.)
+5. **DÉTECTE** les anti-patterns et patterns dangereux
+
 ### Patch Workflow Example:
 ```
 User: "Add a new function to handle jumping"
@@ -79,6 +143,26 @@ User: "Add a new function to handle jumping"
 4. preview_patch with complete function including 'end'
 5. Apply patch
 6. validate_game to check syntax
+```
+
+### 🚨 QUE FAIRE SI VOTRE MODIFICATION EST BLOQUÉE:
+
+1. **Lisez attentivement les erreurs** - Elles indiquent exactement ce qui ne va pas
+2. **Vérifiez vos blocs** - Comptez manuellement les `function`/`if`/`for` et leurs `end`
+3. **Utilisez preview_patch** - Pour voir le résultat avant d'appliquer
+4. **Corrigez et réessayez** - Le système vous guidera
+
+### 📝 EXEMPLE D'ERREUR TYPIQUE:
+```
+❌ Validation échouée - Écriture bloquée
+
+🚨 Erreurs critiques:
+- Ligne 15: Bloc 'function' ouvert à la ligne 10 n'est pas fermé. Il manque 'end'
+- Parenthèses non équilibrées: 3 '(' et 2 ')'
+
+💡 Suggestions:
+- Ajoutez 'end' après la ligne 15
+- Vérifiez la parenthèse manquante à la ligne 12
 ```
 
 ### Auto-validation is enabled by default!

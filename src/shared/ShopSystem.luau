@@ -6,7 +6,8 @@ ShopSystem.Categories = {
     TRAILS = "Trails",
     BOOSTS = "Boosts",
     ABILITIES = "Abilities",
-    COSMETICS = "Cosmetics"
+    COSMETICS = "Cosmetics",
+    DECALS = "Decals"
 }
 
 -- Configuration des items de la boutique
@@ -20,10 +21,7 @@ ShopSystem.Items = {
         price = 100,
         icon = "🔥",
         data = {
-            texture = "rbxasset://textures/particles/fire_main.dds",
-            color = ColorSequence.new(Color3.fromRGB(255, 100, 0)),
-            lifetime = 1,
-            rate = 50
+            trailType = "Fire"
         }
     },
     {
@@ -34,10 +32,7 @@ ShopSystem.Items = {
         price = 150,
         icon = "❄️",
         data = {
-            texture = "rbxasset://textures/particles/sparkles_main.dds",
-            color = ColorSequence.new(Color3.fromRGB(100, 200, 255)),
-            lifetime = 1.5,
-            rate = 40
+            trailType = "Ice"
         }
     },
     {
@@ -48,19 +43,108 @@ ShopSystem.Items = {
         price = 300,
         icon = "🌈",
         data = {
-            texture = "rbxasset://textures/particles/sparkles_main.dds",
-            color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
-                ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 165, 0)),
-                ColorSequenceKeypoint.new(0.4, Color3.fromRGB(255, 255, 0)),
-                ColorSequenceKeypoint.new(0.6, Color3.fromRGB(0, 255, 0)),
-                ColorSequenceKeypoint.new(0.8, Color3.fromRGB(0, 0, 255)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(148, 0, 211))
-            }),
-            lifetime = 2,
-            rate = 60
+            trailType = "Rainbow"
         }
     },
+    {
+        id = "trail_electric",
+        description = "Des éclairs crépitants te suivent !",
+        category = ShopSystem.Categories.TRAILS,
+        price = 200,
+        icon = "⚡",
+        data = {
+            trailType = "Electric"
+        }
+    },
+    {
+        id = "trail_magic",
+        name = "Trail Magique",
+        description = "Une aura mystique et colorée !",
+        category = ShopSystem.Categories.TRAILS,
+        price = 250,
+        icon = "✨",
+        data = {
+            trailType = "Magic"
+        }
+    },
+    {
+        id = "trail_lightning",
+        name = "Trail Éclair",
+        description = "La puissance de la foudre pure !",
+        category = ShopSystem.Categories.TRAILS,
+        price = 350,
+        icon = "🌩️",
+        data = {
+            trailType = "Lightning"
+        }
+    },
+    {
+        id = "trail_galaxy",
+        name = "Trail Galaxie",
+        description = "Les étoiles et l'univers à tes pieds !",
+        category = ShopSystem.Categories.TRAILS,
+        price = 400,
+        icon = "🌌",
+        data = {
+            trailType = "Galaxy"
+        }
+    },
+    {
+        id = "trail_shadow",
+        name = "Trail Ombre",
+        description = "Les ténèbres te suivent partout...",
+        category = ShopSystem.Categories.TRAILS,
+        price = 300,
+        icon = "🌑",
+        data = {
+            trailType = "Shadow"
+        }
+    },
+    {
+        id = "trail_neon",
+        name = "Trail Néon",
+        description = "Brillant et coloré comme les néons de la ville !",
+        category = ShopSystem.Categories.TRAILS,
+        price = 280,
+        icon = "💡",
+        data = {
+            trailType = "Neon"
+        }
+    },
+    {
+        id = "trail_nature",
+        name = "Trail Nature", 
+        description = "La force de la nature t'accompagne !",
+        category = ShopSystem.Categories.TRAILS,
+        price = 220,
+        icon = "🍃",
+        data = {
+            trailType = "Nature"
+        }
+    },
+    {
+        id = "trail_gold",
+        name = "Trail Doré",
+        description = "Un sillage royal en or pur !",
+        category = ShopSystem.Categories.TRAILS,
+        price = 500,
+        icon = "⭐",
+        data = {
+            trailType = "Gold"
+        }
+    },
+    {
+        id = "trail_default",
+        name = "Trail Classique",
+        description = "Le trail de base, simple mais efficace !",
+        category = ShopSystem.Categories.TRAILS,
+        price = 0,
+        icon = "💨",
+        data = {
+            trailType = "Default"
+        }
+    },
+    
     
     -- BOOSTS
     {
@@ -143,6 +227,118 @@ ShopSystem.Items = {
         icon = "🪽",
         data = {
             accessoryId = "wings_angel"
+        }
+    },
+    
+    -- DECALS
+    {
+        id = "decal_anime_girl",
+        name = "Anime Girl",
+        description = "Une jolie fille anime pour décorer ton personnage !",
+        category = ShopSystem.Categories.DECALS,
+        price = 150,
+        icon = "🎨",
+        data = {
+            decalId = "rbxassetid://1234538"
+        }
+    },
+    {
+        id = "decal_pikachu",
+        name = "Pikachu",
+        description = "L'adorable Pokémon électrique !",
+        category = ShopSystem.Categories.DECALS,
+        price = 200,
+        icon = "⚡",
+        data = {
+            decalId = "rbxassetid://46059313"
+        }
+    },
+    {
+        id = "decal_drip_goku",
+        name = "Drip Goku",
+        description = "Goku avec du style !",
+        category = ShopSystem.Categories.DECALS,
+        price = 300,
+        icon = "🔥",
+        data = {
+            decalId = "rbxassetid://7683701966"
+        }
+    },
+    {
+        id = "decal_straw_hat",
+        name = "Straw Hat Pirates",
+        description = "L'emblème des pirates au chapeau de paille !",
+        category = ShopSystem.Categories.DECALS,
+        price = 250,
+        icon = "🏴‍☠️",
+        data = {
+            decalId = "rbxassetid://9478562327"
+        }
+    },
+    {
+        id = "decal_epic_face",
+        name = "Epic Face",
+        description = "Le visage épique classique de Roblox !",
+        category = ShopSystem.Categories.DECALS,
+        price = 100,
+        icon = "😎",
+        data = {
+            decalId = "rbxassetid://109251560"
+        }
+    },
+    {
+        id = "decal_spongebob",
+        name = "SpongeBob Graffiti",
+        description = "Bob l'éponge en mode street art !",
+        category = ShopSystem.Categories.DECALS,
+        price = 175,
+        icon = "🧽",
+        data = {
+            decalId = "rbxassetid://51812595"
+        }
+    },
+    {
+        id = "decal_monster_energy",
+        name = "Monster Energy",
+        description = "Le logo emblématique Monster Energy !",
+        category = ShopSystem.Categories.DECALS,
+        price = 150,
+        icon = "🥤",
+        data = {
+            decalId = "rbxassetid://123474111"
+        }
+    },
+    {
+        id = "decal_finn_jake",
+        name = "Finn & Jake", 
+        description = "Les héros d'Adventure Time !",
+        category = ShopSystem.Categories.DECALS,
+        price = 225,
+        icon = "🗡️",
+        data = {
+            decalId = "rbxassetid://80684094"
+        }
+    },
+    {
+        id = "decal_cute_anime",
+        name = "Cute Anime Girl",
+        description = "Une fille anime super kawaii !",
+        category = ShopSystem.Categories.DECALS,
+        price = 180,
+        icon = "💕",
+        data = {
+            decalId = "rbxassetid://6394847912"
+        }
+    },
+    {
+        id = "decal_bang",
+        name = "Bang! Comic",
+        description = "Effet comic book explosif !",
+        category = ShopSystem.Categories.DECALS,
+        price = 120,
+        icon = "💥",
+        data = {
+            decalId = "rbxassetid://6013360"
         }
     }
 }

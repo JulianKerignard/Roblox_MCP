@@ -495,3 +495,6 @@ export async function compileCheckTool(projectPath: string = process.cwd(), targ
   
   return output;
 }
+
+// Export for compatibility
+export default compileCheckTool;

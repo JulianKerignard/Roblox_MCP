@@ -19,7 +19,8 @@ local function getDefaultPlayerData()
             trail = nil,
             boost = nil,
             ability = nil,
-            cosmetic = nil
+            cosmetic = nil,
+            decal = nil
         }
     }
 end
@@ -40,6 +41,38 @@ local function applyItemEffects(player, item, equip)
                 humanoid.JumpPower = 50 * (item.data.jumpMultiplier or 1)
             elseif item.id == "boost_jump" and not equip then
                 humanoid.JumpPower = 50
+            end
+        end
+    elseif item.category == ShopSystem.Categories.DECALS then
+        -- Appliquer le decal sur le torse du personnage
+        local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
+        if torso then
+            -- Supprimer l'ancien decal s'il existe
+            local oldDecal = torso:FindFirstChild("ShopDecal")
+            if oldDecal then
+                oldDecal:Destroy()
+            end
+            
+            -- Appliquer le nouveau decal si on équipe
+            if equip and item.data.decalId then
+                local decal = Instance.new("Decal")
+                decal.Name = "ShopDecal"
+                decal.Texture = item.data.decalId
+                decal.Face = Enum.NormalId.Front
+                decal.Parent = torso
+                
+                -- Ajouter aussi sur le dos pour un effet plus cool
+                local backDecal = Instance.new("Decal")
+                backDecal.Name = "ShopDecalBack"
+                backDecal.Texture = item.data.decalId
+                backDecal.Face = Enum.NormalId.Back
+                backDecal.Parent = torso
+            else
+                -- Supprimer aussi le decal du dos
+                local backDecal = torso:FindFirstChild("ShopDecalBack")
+                if backDecal then
+                    backDecal:Destroy()
+                end
             end
         end
     end
@@ -142,8 +175,9 @@ remotes.EquipItem.OnServerEvent:Connect(function(player, itemId, equip)
         categorySlot = "ability"
     elseif item.category == ShopSystem.Categories.COSMETICS then
         categorySlot = "cosmetic"
+    elseif item.category == ShopSystem.Categories.DECALS then
+        categorySlot = "decal"
     end
-    
     if categorySlot then
         if equip then
             data.equippedItems[categorySlot] = itemId

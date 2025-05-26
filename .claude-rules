@@ -1,0 +1,28 @@
+# .claude-rules
+# Rules that Claude MUST follow when using this MCP server
+
+MANDATORY_SEARCH_BEFORE_WRITE: true
+REQUIRE_CONTEXT_BEFORE_MODIFICATION: true
+AUTO_VALIDATION_ENABLED: true
+
+# Search requirements for common operations
+OPERATIONS_REQUIRING_SEARCH:
+  - create_script: ["search similar scripts", "check naming conventions"]
+  - write_script: ["search existing code", "understand dependencies"]
+  - modify_feature: ["search current implementation", "find related code"]
+  - fix_error: ["search error patterns", "find similar fixes"]
+
+# Minimum searches before writing
+MIN_SEARCHES_BEFORE_WRITE: 2
+
+# File patterns that ALWAYS require search
+ALWAYS_SEARCH_PATTERNS:
+  - "*.server.luau": ["PlayerAdded", "RemoteEvent", "DataStore"]
+  - "*.client.luau": ["PlayerGui", "UserInputService", "Camera"]
+  - "*.luau": ["require", "module", "return"]
+
+# Error messages if rules violated
+VIOLATION_MESSAGES:
+  no_search: "❌ VIOLATION: You must use search_in_scripts before writing code!"
+  no_context: "❌ VIOLATION: You must read existing files before modification!"
+  blind_coding: "❌ VIOLATION: Writing code without understanding the project structure!"

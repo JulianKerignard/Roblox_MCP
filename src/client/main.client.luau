@@ -138,7 +138,102 @@ end
 local HUD = {}
 
 -- Déclaration anticipée pour éviter les références circulaires
-local NotificationSystem
+local NotificationSystem = {}
+NotificationSystem.queue = {}
+NotificationSystem.active = {}
+
+function NotificationSystem.Create(text, icon, color, duration)
+    -- Vérifier que gui existe
+    if not gui then return end
+    
+    local notification = UIComponents.CreateFrame({
+        size = UDim2.new(0, 350, 0, 70),
+        position = UDim2.new(0.5, -175, 0, -100),
+        cornerRadius = 15,
+        gradient = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, COLORS.primary),
+            ColorSequenceKeypoint.new(1, COLORS.secondary)
+        }),
+        stroke = {
+            color = color or COLORS.accent,
+            thickness = 2,
+            transparency = 0
+        }
+    })
+    notification.Parent = gui
+    
+    -- Contenu
+    local content = Instance.new("Frame")
+    content.Size = UDim2.new(1, -20, 1, -20)
+    content.Position = UDim2.new(0, 10, 0, 10)
+    content.BackgroundTransparency = 1
+    content.Parent = notification
+    
+    if icon then
+        local iconLabel = UIComponents.CreateText({
+            size = UDim2.new(0, 50, 1, 0),
+            position = UDim2.new(0, 0, 0, 0),
+            text = icon,
+            font = Enum.Font.SourceSansBold
+        })
+        iconLabel.Parent = content
+    end
+    
+    local textLabel = UIComponents.CreateText({
+        size = icon and UDim2.new(1, -60, 1, 0) or UDim2.new(1, 0, 1, 0),
+        position = icon and UDim2.new(0, 60, 0, 0) or UDim2.new(0, 0, 0, 0),
+        text = text,
+        font = Enum.Font.GothamMedium,
+        xAlignment = Enum.TextXAlignment.Left
+    })
+    textLabel.Parent = content
+    
+    -- Animation d'entrée
+    notification.Position = UDim2.new(0.5, -175, 0, -100)
+    local targetY = 20 + (#NotificationSystem.active * 80)
+    
+    TweenService:Create(notification, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, -175, 0, targetY)
+    }):Play()
+    
+    table.insert(NotificationSystem.active, notification)
+    
+    -- Auto-destruction dans une tâche séparée
+    task.spawn(function()
+        task.wait(duration or 3)
+        
+        -- Animation de sortie
+        TweenService:Create(notification, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+            Position = UDim2.new(0.5, -175, 0, -100),
+            BackgroundTransparency = 1
+        }):Play()
+        
+        for _, desc in pairs(notification:GetDescendants()) do
+            if desc:IsA("TextLabel") then
+                TweenService:Create(desc, TweenInfo.new(0.3), {TextTransparency = 1}):Play()
+            elseif desc:IsA("UIStroke") then
+                TweenService:Create(desc, TweenInfo.new(0.3), {Transparency = 1}):Play()
+            end
+        end
+        
+        task.wait(0.3)
+        
+        -- Retirer de la liste et réorganiser
+        local index = table.find(NotificationSystem.active, notification)
+        if index then
+            table.remove(NotificationSystem.active, index)
+            
+            -- Réorganiser les notifications restantes
+            for i, notif in ipairs(NotificationSystem.active) do
+                TweenService:Create(notif, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+                    Position = UDim2.new(0.5, -175, 0, 20 + ((i-1) * 80))
+                }):Play()
+            end
+        end
+        
+        notification:Destroy()
+    end)
+end
 
 function HUD.Create()
     local hudContainer = UIComponents.CreateFrame({
@@ -430,98 +525,6 @@ function StaminaUI.Update()
     end
 end
 
-local NotificationSystem = {}
-NotificationSystem.queue = {}
-NotificationSystem.active = {}
-
-function NotificationSystem.Create(text, icon, color, duration)
-    local notification = UIComponents.CreateFrame({
-        size = UDim2.new(0, 350, 0, 70),
-        position = UDim2.new(0.5, -175, 0, -100),
-        cornerRadius = 15,
-        gradient = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, COLORS.primary),
-            ColorSequenceKeypoint.new(1, COLORS.secondary)
-        }),
-        stroke = {
-            color = color or COLORS.accent,
-            thickness = 2,
-            transparency = 0
-        }
-    })
-    notification.Parent = gui
-    
-    -- Contenu
-    local content = Instance.new("Frame")
-    content.Size = UDim2.new(1, -20, 1, -20)
-    content.Position = UDim2.new(0, 10, 0, 10)
-    content.BackgroundTransparency = 1
-    content.Parent = notification
-    
-    if icon then
-        local iconLabel = UIComponents.CreateText({
-            size = UDim2.new(0, 50, 1, 0),
-            position = UDim2.new(0, 0, 0, 0),
-            text = icon,
-            font = Enum.Font.SourceSansBold
-        })
-        iconLabel.Parent = content
-    end
-    
-    local textLabel = UIComponents.CreateText({
-        size = icon and UDim2.new(1, -60, 1, 0) or UDim2.new(1, 0, 1, 0),
-        position = icon and UDim2.new(0, 60, 0, 0) or UDim2.new(0, 0, 0, 0),
-        text = text,
-        font = Enum.Font.GothamMedium,
-        xAlignment = Enum.TextXAlignment.Left
-    })
-    textLabel.Parent = content
-    
-    -- Animation d'entrée
-    notification.Position = UDim2.new(0.5, -175, 0, -100)
-    local targetY = 20 + (#NotificationSystem.active * 80)
-    
-    TweenService:Create(notification, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Position = UDim2.new(0.5, -175, 0, targetY)
-    }):Play()
-    
-    table.insert(NotificationSystem.active, notification)
-    
-    -- Auto-destruction
-    task.wait(duration or 3)
-    
-    -- Animation de sortie
-    TweenService:Create(notification, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
-        Position = UDim2.new(0.5, -175, 0, -100),
-        BackgroundTransparency = 1
-    }):Play()
-    
-    for _, desc in pairs(notification:GetDescendants()) do
-        if desc:IsA("TextLabel") then
-            TweenService:Create(desc, TweenInfo.new(0.3), {TextTransparency = 1}):Play()
-        elseif desc:IsA("UIStroke") then
-            TweenService:Create(desc, TweenInfo.new(0.3), {Transparency = 1}):Play()
-        end
-    end
-    
-    task.wait(0.3)
-    
-    -- Retirer de la liste et réorganiser
-    local index = table.find(NotificationSystem.active, notification)
-    if index then
-        table.remove(NotificationSystem.active, index)
-        
-        -- Réorganiser les notifications restantes
-        for i, notif in ipairs(NotificationSystem.active) do
-            TweenService:Create(notif, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
-                Position = UDim2.new(0.5, -175, 0, 20 + ((i-1) * 80))
-            }):Play()
-        end
-    end
-    
-    notification:Destroy()
-end
-
 -- === MODULE BOUTIQUE ===
 local ShopUI = {}
 ShopUI.isOpen = false
@@ -648,7 +651,7 @@ function ShopUI.Create()
     categoriesContent.Parent = ShopUI.categoriesPanel
     
     -- Créer les boutons de catégories
-    local categories = {"Trails", "Boosts", "Abilities", "Cosmetics"}
+    local categories = {"Trails", "Boosts", "Abilities", "Cosmetics", "Decals"}
     ShopUI.categoryButtons = {}
     
     for i, category in ipairs(categories) do
@@ -706,7 +709,7 @@ function ShopUI.Create()
     ShopUI.openButton.MouseButton1Click:Connect(function()
         ShopUI.Toggle()
     end)
-    
+
     return ShopUI.container
 end
 
@@ -720,6 +723,7 @@ function ShopUI.SelectCategory(category)
         }):Play()
     end
     
+
     -- Afficher les items
     ShopUI.DisplayItems(category)
 end
@@ -836,13 +840,7 @@ function ShopUI.HandleItemAction(item, isOwned, isEquipped)
         -- Acheter
         NotificationSystem.Create("Achat en cours...", "⏳", COLORS.accent)
         
-            local success, message = shopRemotes.PurchaseItem:InvokeServer(item.id)
-            
-            -- Rafraîchir l'interface immédiatement après l'achat
-            if success then
-                playerGems = playerGems - item.price
-                ShopUI.UpdateGems()
-            end
+        local success, message = shopRemotes.PurchaseItem:InvokeServer(item.id)
         
         if success then
             NotificationSystem.Create(message, "✅", COLORS.success)
@@ -855,11 +853,14 @@ function ShopUI.HandleItemAction(item, isOwned, isEquipped)
             
             -- Rafraîchir l'affichage immédiatement
             ShopUI.DisplayItems(ShopUI.selectedCategory)
+            
+            -- Mettre à jour l'affichage des gemmes
+            ShopUI.UpdateGems()
         else
-            NotificationSystem.Create(message, "❌", COLORS.danger)
         end
     end
 end
+
 
 function ShopUI.UpdateData()
     local shopRemotes = ShopSystem.SetupRemotes()
@@ -916,7 +917,23 @@ function ShopUI.Toggle()
     end
 end
 
--- === SYSTÈME DE SPRINT ===
+
+-- Fonction helper pour récupérer le trail équipé
+local function GetEquippedTrailType()
+    local equippedTrailId = ShopUI.equippedItems and ShopUI.equippedItems.trail
+    
+    if equippedTrailId then
+        -- Récupérer l'item pour obtenir le type de trail
+        local item = ShopSystem.GetItemById(equippedTrailId)
+        if item and item.data and item.data.trailType then
+            return item.data.trailType
+        end
+    end
+    
+    return "Default" -- Trail par défaut si aucun équipé
+end
+
+
 local SprintController = {}
 SprintController.connection = nil
 
@@ -941,8 +958,9 @@ function SprintController.Setup()
         
         if input.KeyCode == SprintSystem.Config.SprintKey then
             if SprintSystem.StartSprint(humanoid) then
-                TrailSystem.EnableTrail(player, "Electric")
-                
+                -- Utiliser le trail équipé
+                local trailType = GetEquippedTrailType()
+                TrailSystem.EnableTrail(player, trailType)
                 -- Effet FOV
                 if SprintSystem.Config.EnableFOVEffect then
                     TweenService:Create(camera, 
@@ -1100,8 +1118,6 @@ local function Initialize()
     NotificationSystem.Create("💎 Rouge: 1pt | Bleue: 3pts | Verte: 5pts", "📊", COLORS.accent, 5)
     task.wait(0.5)
     NotificationSystem.Create("⚡ SHIFT pour sprinter | 🛍️ Boutique en haut à droite", "💡", COLORS.gold, 5)
-
-
 end
 
 -- Démarrer l'initialisation

@@ -13,6 +13,12 @@ export interface RobloxAPI {
     description: string;
     readonly?: boolean;
   }>;
+  events?: Array<{
+    name: string;
+    description: string;
+    signature: string;
+    example?: string;
+  }>;
 }
 
 export const robloxAPIs: RobloxAPI[] = [

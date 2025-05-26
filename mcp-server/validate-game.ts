@@ -501,3 +501,6 @@ export async function validateGameTool(projectPath: string = process.cwd()): Pro
   
   return output;
 }
+
+// Export for compatibility
+export default validateGameTool;

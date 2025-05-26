@@ -13,5 +13,5 @@
     "resolveJsonModule": true
   },
   "include": ["mcp-server/**/*"],
-  "exclude": ["node_modules", "dist", "src"]
+  "exclude": ["node_modules", "dist", "src", "**/*.test.ts", "**/__tests__/**"]
 }
