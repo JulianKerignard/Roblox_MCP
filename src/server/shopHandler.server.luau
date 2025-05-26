@@ -24,6 +24,27 @@ local function getDefaultPlayerData()
     }
 end
 
+-- Appliquer les effets d'un item (définie avant son utilisation)
+local function applyItemEffects(player, item, equip)
+    local character = player.Character
+    if not character then return end
+    
+    if item.category == ShopSystem.Categories.BOOSTS then
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            if item.id == "boost_speed" and equip then
+                humanoid.WalkSpeed = 16 * (item.data.speedMultiplier or 1)
+            elseif item.id == "boost_speed" and not equip then
+                humanoid.WalkSpeed = 16
+            elseif item.id == "boost_jump" and equip then
+                humanoid.JumpPower = 50 * (item.data.jumpMultiplier or 1)
+            elseif item.id == "boost_jump" and not equip then
+                humanoid.JumpPower = 50
+            end
+        end
+    end
+end
+
 -- Charger les données du joueur
 local function loadPlayerData(player)
     playerData[player] = getDefaultPlayerData()
@@ -40,6 +61,16 @@ local function loadPlayerData(player)
     gems.Name = "Gems"
     gems.Value = playerData[player].gems
     gems.Parent = leaderstats
+    
+    -- Notifier le client du score initial après un court délai
+    task.wait(2) -- Attendre que le client soit complètement chargé
+    local gemRemotes = ReplicatedStorage:FindFirstChild("GemRemotes")
+    if gemRemotes then
+        local updateScore = gemRemotes:FindFirstChild("UpdateScore")
+        if updateScore then
+            updateScore:FireClient(player, playerData[player].gems)
+        end
+    end
     
     print("Données du joueur chargées pour", player.Name)
 end
@@ -69,6 +100,15 @@ remotes.PurchaseItem.OnServerInvoke = function(player, itemId)
     -- Mettre à jour l'affichage des gemmes
     player.leaderstats.Gems.Value = data.gems
     
+    -- Notifier le client
+    local gemRemotes = ReplicatedStorage:FindFirstChild("GemRemotes")
+    if gemRemotes then
+        local updateScore = gemRemotes:FindFirstChild("UpdateScore")
+        if updateScore then
+            updateScore:FireClient(player, data.gems)
+        end
+    end
+    
     print(player.Name, "a acheté", item.name)
     
     return true, "Achat réussi"
@@ -77,7 +117,7 @@ end
 -- Fonction pour obtenir les items possédés
 remotes.GetOwnedItems.OnServerInvoke = function(player)
     local data = playerData[player]
-    if not data then return {} end
+    if not data then return {}, {} end
     return data.ownedItems, data.equippedItems
 end
 
@@ -118,27 +158,6 @@ remotes.EquipItem.OnServerEvent:Connect(function(player, itemId, equip)
     end
 end)
 
--- Appliquer les effets d'un item
-local function applyItemEffects(player, item, equip)
-    local character = player.Character
-    if not character then return end
-    
-    if item.category == ShopSystem.Categories.BOOSTS then
-        local humanoid = character:FindFirstChild("Humanoid")
-        if humanoid then
-            if item.id == "boost_speed" and equip then
-                humanoid.WalkSpeed = 16 * (item.data.speedMultiplier or 1)
-            elseif item.id == "boost_speed" and not equip then
-                humanoid.WalkSpeed = 16
-            elseif item.id == "boost_jump" and equip then
-                humanoid.JumpPower = 50 * (item.data.jumpMultiplier or 1)
-            elseif item.id == "boost_jump" and not equip then
-                humanoid.JumpPower = 50
-            end
-        end
-    end
-end
-
 -- Quand un joueur rejoint
 Players.PlayerAdded:Connect(function(player)
     loadPlayerData(player)
@@ -173,6 +192,15 @@ task.spawn(function()
             if player.Parent then -- Vérifier que le joueur est toujours connecté
                 data.gems = data.gems + 10
                 player.leaderstats.Gems.Value = data.gems
+                
+                -- Notifier le client du nouveau score
+                local gemRemotes = ReplicatedStorage:FindFirstChild("GemRemotes")
+                if gemRemotes then
+                    local updateScore = gemRemotes:FindFirstChild("UpdateScore")
+                    if updateScore then
+                        updateScore:FireClient(player, data.gems)
+                    end
+                end
             end
         end
     end

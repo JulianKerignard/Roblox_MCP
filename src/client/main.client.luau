@@ -24,16 +24,16 @@ local camera = workspace.CurrentCamera
 
 -- Configuration des couleurs
 local COLORS = {
-    primary = Color3.fromRGB(45, 45, 55),
-    secondary = Color3.fromRGB(35, 35, 45),
-    accent = Color3.fromRGB(100, 200, 255),
-    gold = Color3.fromRGB(255, 215, 0),
-    success = Color3.fromRGB(100, 255, 150),
-    danger = Color3.fromRGB(255, 100, 100),
-    text = {
-        primary = Color3.new(1, 1, 1),
-        secondary = Color3.fromRGB(200, 200, 200),
-        muted = Color3.fromRGB(150, 150, 150)
+    ["primary"] = Color3.fromRGB(45, 45, 55),
+    ["secondary"] = Color3.fromRGB(35, 35, 45),
+    ["accent"] = Color3.fromRGB(100, 200, 255),
+    ["gold"] = Color3.fromRGB(255, 215, 0),
+    ["success"] = Color3.fromRGB(100, 255, 150),
+    ["danger"] = Color3.fromRGB(255, 100, 100),
+    ["text"] = {
+        ["primary"] = Color3.new(1, 1, 1),
+        ["secondary"] = Color3.fromRGB(200, 200, 200),
+        ["muted"] = Color3.fromRGB(150, 150, 150)
     }
 }
 
@@ -134,10 +134,13 @@ function UIComponents.CreateButton(props)
 end
 
 -- === MODULE HUD PRINCIPAL ===
+-- === MODULE HUD PRINCIPAL ===
 local HUD = {}
 
+-- Déclaration anticipée pour éviter les références circulaires
+local NotificationSystem
+
 function HUD.Create()
-    -- Container principal centré en bas
     local hudContainer = UIComponents.CreateFrame({
         size = UDim2.new(0, 400, 0, 120),
         position = UDim2.new(0.5, -200, 1, -140),
@@ -276,16 +279,31 @@ function HUD.UpdateScore(score)
         end)
     end
     
-    -- Mettre à jour l'objectif et la progression
-    local nextObjective = GemSystem.GetNextObjective(score)
-    if HUD.objectiveLabel then
-        HUD.objectiveLabel.Text = tostring(nextObjective)
+    -- Garder l'objectif actuel en mémoire (ne pas le réinitialiser après achat)
+    if not HUD.currentObjective or score >= HUD.currentObjective then
+        -- Ne mettre à jour l'objectif que si on l'a atteint ou s'il n'est pas défini
+        HUD.currentObjective = GemSystem.GetNextObjective(score)
+        
+        -- Notification d'objectif atteint uniquement si on vient vraiment de l'atteindre
+        if score > 0 and HUD.currentObjective > 0 then
+            NotificationSystem.Create(
+                string.format("🎉 OBJECTIF ATTEINT! %d gemmes collectées!", score),
+                "🏆",
+                COLORS.gold,
+                5
+            )
+        end
     end
     
-    -- Calculer la progression
+    -- Afficher l'objectif actuel
+    if HUD.objectiveLabel then
+        HUD.objectiveLabel.Text = tostring(HUD.currentObjective)
+    end
+    
+    -- Calculer la progression vers l'objectif actuel
     local previousObjective = 0
     for _, obj in ipairs(GemSystem.Objectives) do
-        if obj <= score then
+        if obj < HUD.currentObjective then
             previousObjective = obj
         else
             break
@@ -293,8 +311,8 @@ function HUD.UpdateScore(score)
     end
     
     local progress = 0
-    if nextObjective > previousObjective then
-        progress = (score - previousObjective) / (nextObjective - previousObjective)
+    if HUD.currentObjective > previousObjective then
+        progress = math.max(0, math.min(1, (score - previousObjective) / (HUD.currentObjective - previousObjective)))
     end
     
     if HUD.progressBar then
@@ -410,10 +428,8 @@ function StaminaUI.Update()
             BackgroundColor3 = color
         }):Play()
     end
-    end
 end
 
--- === MODULE NOTIFICATIONS ===
 local NotificationSystem = {}
 NotificationSystem.queue = {}
 NotificationSystem.active = {}
@@ -504,7 +520,6 @@ function NotificationSystem.Create(text, icon, color, duration)
     end
     
     notification:Destroy()
-end
 end
 
 -- === MODULE BOUTIQUE ===
@@ -806,16 +821,39 @@ function ShopUI.HandleItemAction(item, isOwned, isEquipped)
     if isOwned then
         -- Équiper/Déséquiper
         shopRemotes.EquipItem:FireServer(item.id, not isEquipped)
+        
+        -- Mise à jour immédiate locale avant la confirmation serveur
+        if isEquipped then
+            ShopUI.equippedItems[item.category:lower()] = nil
+        else
+            ShopUI.equippedItems[item.category:lower()] = item.id
+        end
+        
+        -- Rafraîchir l'affichage immédiatement
         task.wait(0.1)
-        ShopUI.UpdateData()
         ShopUI.DisplayItems(ShopUI.selectedCategory)
     else
         -- Acheter
-        local success, message = shopRemotes.PurchaseItem:InvokeServer(item.id)
+        NotificationSystem.Create("Achat en cours...", "⏳", COLORS.accent)
+        
+            local success, message = shopRemotes.PurchaseItem:InvokeServer(item.id)
+            
+            -- Rafraîchir l'interface immédiatement après l'achat
+            if success then
+                playerGems = playerGems - item.price
+                ShopUI.UpdateGems()
+            end
         
         if success then
             NotificationSystem.Create(message, "✅", COLORS.success)
-            ShopUI.UpdateData()
+            
+            -- Mise à jour des données depuis le serveur
+            task.wait(0.1)
+            local owned, equipped = shopRemotes.GetOwnedItems:InvokeServer()
+            ShopUI.ownedItems = owned or {}
+            ShopUI.equippedItems = equipped or {}
+            
+            -- Rafraîchir l'affichage immédiatement
             ShopUI.DisplayItems(ShopUI.selectedCategory)
         else
             NotificationSystem.Create(message, "❌", COLORS.danger)
@@ -994,24 +1032,10 @@ end
 local function OnScoreUpdate(newScore)
     currentScore = newScore
     HUD.UpdateScore(newScore)
-    
-    -- Vérifier les objectifs atteints
-    for _, objective in ipairs(GemSystem.Objectives) do
-        if newScore == objective then
-            NotificationSystem.Create(
-                string.format("🎉 OBJECTIF ATTEINT! %d gemmes collectées!", objective),
-                "🏆",
-                COLORS.gold,
-                5
-            )
-            break
-        end
-    end
 end
 
 -- === INITIALISATION ===
 local function Initialize()
-    -- Créer le GUI principal
     gui = Instance.new("ScreenGui")
     gui.Name = "GemCollectorGUI"
     gui.ResetOnSpawn = false
@@ -1076,6 +1100,8 @@ local function Initialize()
     NotificationSystem.Create("💎 Rouge: 1pt | Bleue: 3pts | Verte: 5pts", "📊", COLORS.accent, 5)
     task.wait(0.5)
     NotificationSystem.Create("⚡ SHIFT pour sprinter | 🛍️ Boutique en haut à droite", "💡", COLORS.gold, 5)
+
+
 end
 
 -- Démarrer l'initialisation

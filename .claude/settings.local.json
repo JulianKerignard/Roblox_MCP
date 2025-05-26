@@ -16,7 +16,15 @@
       "Bash(claude mcp add:*)",
       "Bash(mv:*)",
       "Bash(ls:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(npx selene:*)",
+      "Bash(luau-lsp analyze:*)",
+      "Bash(for file in src/**/*.luau)",
+      "Bash(do echo \"Checking $file...\")",
+      "Bash(luac:*)",
+      "Bash(done)",
+      "Bash(rg:*)",
+      "Bash(awk:*)"
     ],
     "deny": []
   }

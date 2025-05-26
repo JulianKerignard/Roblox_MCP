@@ -130,7 +130,6 @@ local function CollectGem(gem, character)
             end
         end
         return nil
-end
     end
     
     local particleEmitter = findParticleEmitter(gem)

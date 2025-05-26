@@ -16,6 +16,10 @@ import { luauTemplates, getTemplate, getTemplatesByCategory, applyTemplate } fro
 import { detectAntiPatterns, getAntiPatternSuggestions } from "./antipatterns.js";
 import { robloxAPIs, commonTypes, getServiceAPI, searchAPIs } from "./roblox-apis.js";
 import { validateGameTool } from "./validate-game.js";
+import { compileCheckTool } from "./compile-check.js";
+import { patchTemplates, syntaxHints, countSyntaxElements, validateSyntaxBalance, suggestSyntaxFixes } from "./patch-templates.js";
+import { SYNTAX_RULES, validatePatchBeforeApply, getSyntaxReminder, checkWorkflowCompliance } from "./syntax-rules.js";
+import { analyzeError, generateErrorAnalysisReport, validateApproach, ERROR_PATTERNS } from "./error-handler.js";
 
 interface PatchOperation {
   scriptPath: string;
@@ -93,6 +97,8 @@ class RojoMCPServer {
     cacheHits: 0,
     cacheMisses: 0
   };
+  private toolHistory: string[] = []; // Historique des outils utilisés
+  private readonly MAX_TOOL_HISTORY = 20; // Garder les 20 derniers outils
 
   constructor() {
     this.server = new Server(
@@ -480,6 +486,19 @@ class RojoMCPServer {
             },
           },
           {
+            name: "compile_check",
+            description: "Simule une compilation Luau pour détecter TOUTES les erreurs de syntaxe (comme un vrai compilateur)",
+            inputSchema: {
+              type: "object",
+              properties: {
+                targetFile: {
+                  type: "string",
+                  description: "Fichier spécifique à compiler (optionnel, sinon compile tout le projet)",
+                },
+              },
+            },
+          },
+          {
             name: "roblox_api",
             description: "Affiche la documentation des APIs Roblox les plus utilisées",
             inputSchema: {
@@ -560,6 +579,55 @@ class RojoMCPServer {
               },
             },
           },
+          {
+            name: "syntax_helper",
+            description: "Aide à éviter les erreurs de syntaxe lors des patches en fournissant des templates et en validant la syntaxe",
+            inputSchema: {
+              type: "object",
+              properties: {
+                action: {
+                  type: "string",
+                  enum: ["get_template", "validate_syntax", "count_blocks", "suggest_fix", "show_rules"],
+                  description: "Action à effectuer : get_template (obtenir un template), validate_syntax (valider), count_blocks (compter blocs), suggest_fix (suggestions), show_rules (afficher règles)",
+                },
+                scriptPath: {
+                  type: "string",
+                  description: "Chemin du script à analyser (pour validate_syntax, count_blocks)",
+                },
+                templateName: {
+                  type: "string",
+                  description: "Nom du template souhaité (pour get_template)",
+                },
+                errorMessage: {
+                  type: "string",
+                  description: "Message d'erreur pour obtenir des suggestions (pour suggest_fix)",
+                },
+              },
+              required: ["action"],
+            },
+          },
+          {
+            name: "analyze_error",
+            description: "Analyse automatiquement une erreur et fournit des directives précises pour la corriger sans casser le code",
+            inputSchema: {
+              type: "object",
+              properties: {
+                errorMessage: {
+                  type: "string",
+                  description: "Le message d'erreur complet à analyser",
+                },
+                filePath: {
+                  type: "string",
+                  description: "Le chemin du fichier où l'erreur se produit (optionnel)",
+                },
+                lineNumber: {
+                  type: "number",
+                  description: "Le numéro de ligne de l'erreur (optionnel)",
+                },
+              },
+              required: ["errorMessage"],
+            },
+          },
         ] as Tool[],
       };
     });
@@ -567,6 +635,25 @@ class RojoMCPServer {
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
 
+      // Enregistrer l'outil dans l'historique
+      this.toolHistory.push(name);
+      if (this.toolHistory.length > this.MAX_TOOL_HISTORY) {
+        this.toolHistory.shift();
+      }
+
+      // Vérifier la conformité du workflow pour les outils critiques
+      const compliance = checkWorkflowCompliance(this.toolHistory, name);
+      
+      // Forcer l'utilisation d'analyze_error si le contexte suggère une erreur
+      if (name === 'get_project_structure' || name === 'read_script') {
+        const lastTools = this.toolHistory.slice(-3);
+        const hasError = lastTools.some(tool => tool.includes('compile_check') || tool.includes('validate_game'));
+        
+        if (hasError && !lastTools.includes('analyze_error')) {
+          console.error("⚠️ Une erreur a été détectée. Utilisez d'abord 'analyze_error' pour obtenir des directives!");
+        }
+      }
+      
       try {
         switch (name) {
           case "get_project_structure":
@@ -658,6 +745,20 @@ class RojoMCPServer {
               ],
             };
 
+          case "compile_check":
+            const compileResult = await compileCheckTool(
+              this.projectRoot,
+              args?.targetFile as string
+            );
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: compileResult,
+                },
+              ],
+            };
+
           case "roblox_api":
             return this.getRobloxAPI(
               args?.service as string,
@@ -690,6 +791,21 @@ class RojoMCPServer {
 
           case "get_thought_history":
             return this.getThoughtHistory(args?.limit as number);
+
+          case "syntax_helper":
+            return await this.handleSyntaxHelper(
+              args?.action as string,
+              args?.scriptPath as string,
+              args?.templateName as string,
+              args?.errorMessage as string
+            );
+
+          case "analyze_error":
+            return this.analyzeErrorMessage(
+              args?.errorMessage as string,
+              args?.filePath as string,
+              args?.lineNumber as number
+            );
 
           default:
             throw new Error(`Outil inconnu: ${name}`);
@@ -1034,6 +1150,9 @@ class RojoMCPServer {
   }
 
   private async patchScript(patch: PatchOperation) {
+    // Vérifier la conformité du workflow
+    const compliance = checkWorkflowCompliance(this.toolHistory, 'patch_script');
+    
     // Chain-of-thought si activé
     if (this.chainOfThoughtEnabled) {
       const thought = this.generateThoughtProcess('patch_script', {
@@ -1058,6 +1177,30 @@ class RojoMCPServer {
       // Valider les numéros de ligne
       if (patch.lineStart < 1 || patch.lineStart > lines.length + 1) {
         throw new Error(`Numéro de ligne invalide: ${patch.lineStart} (fichier a ${lines.length} lignes)`);
+      }
+
+      // Valider le patch AVANT de l'appliquer
+      if (patch.newContent) {
+        const validation = validatePatchBeforeApply(
+          content,
+          patch.newContent,
+          patch.operation,
+          patch.lineStart,
+          patch.lineEnd
+        );
+        
+        if (!validation.valid && this.autoValidateEnabled) {
+          let errorMsg = `⚠️ **Validation du patch échouée**\n\n`;
+          errorMsg += `**Avertissements:**\n`;
+          validation.warnings.forEach(w => errorMsg += `- ${w}\n`);
+          errorMsg += `\n**Suggestions:**\n`;
+          validation.suggestions.forEach(s => errorMsg += `- ${s}\n`);
+          errorMsg += `\n💡 Utilisez 'syntax_helper' pour obtenir des templates corrects.`;
+          errorMsg += `\n📝 Utilisez 'preview_patch' pour vérifier avant d'appliquer.`;
+          
+          // On continue quand même mais on affiche l'avertissement
+          console.error(errorMsg);
+        }
       }
 
       // Effectuer l'opération
@@ -1123,13 +1266,22 @@ class RojoMCPServer {
       const reviewResult = this.generateAutoReview(lines, newLines, patch);
 
       // Mettre à jour les tokens
-      const responseText = `✅ **Patch appliqué avec succès**\n\n` +
+      let responseText = `✅ **Patch appliqué avec succès**\n\n` +
                           `**Fichier:** \`${patch.scriptPath}\`\n` +
                           `**Opération:** ${patch.operation}\n` +
                           `**Description:** ${patch.description || operationDescription}\n` +
                           `**Détails:** ${operationDescription}\n` +
                           `**Taille finale:** ${newLines.length} lignes\n\n` +
                           reviewResult;
+      
+      // Ajouter un rappel des règles si le workflow n'a pas été respecté
+      if (!compliance.compliant) {
+        responseText += `\n\n${compliance.message}`;
+        responseText += `\n💡 Utilisez \`syntax_helper action: 'show_rules'\` pour voir toutes les règles.`;
+      }
+      
+      // Ajouter le rappel syntaxique pour les outils critiques
+      responseText += getSyntaxReminder('patch_script');
       
       this.updateTokenUsage(responseText);
 
@@ -2618,6 +2770,210 @@ class RojoMCPServer {
       console.error('Erreur lors de la validation automatique:', error);
       return null;
     }
+  }
+
+  private async handleSyntaxHelper(
+    action: string,
+    scriptPath?: string,
+    templateName?: string,
+    errorMessage?: string
+  ) {
+    let responseText = "";
+    const compliance = checkWorkflowCompliance(this.toolHistory, 'syntax_helper');
+
+    try {
+      switch (action) {
+        case "get_template":
+          if (!templateName) {
+            // Lister tous les templates disponibles
+            responseText = "## 📋 **Templates de code disponibles:**\n\n";
+            Object.keys(patchTemplates).forEach(name => {
+              responseText += `- **${name}**: ${this.getTemplateDescription(name)}\n`;
+            });
+            responseText += "\n💡 Utilisez `syntax_helper action: 'get_template', templateName: 'nom'` pour obtenir un template spécifique.";
+          } else {
+            const template = patchTemplates[templateName as keyof typeof patchTemplates];
+            if (template) {
+              responseText = `## 📝 **Template: ${templateName}**\n\n`;
+              responseText += "```luau\n" + template + "\n```\n\n";
+              responseText += "💡 Remplacez les placeholders {{variable}} par vos valeurs.";
+            } else {
+              throw new Error(`Template '${templateName}' non trouvé`);
+            }
+          }
+          break;
+
+        case "validate_syntax":
+          if (!scriptPath) {
+            throw new Error("scriptPath requis pour validate_syntax");
+          }
+          const fullPath = path.join(this.projectRoot, scriptPath);
+          const content = await fs.readFile(fullPath, 'utf-8');
+          const validation = validateSyntaxBalance(content);
+          
+          responseText = `## 🔍 **Validation syntaxique: ${scriptPath}**\n\n`;
+          if (validation.isValid) {
+            responseText += "✅ **Syntaxe valide!**\n\n";
+          } else {
+            responseText += "❌ **Problèmes détectés:**\n\n";
+            validation.issues.forEach(issue => {
+              responseText += `- ${issue}\n`;
+            });
+          }
+          
+          // Ajouter les comptages
+          const counts = countSyntaxElements(content);
+          responseText += "\n**📊 Comptages:**\n";
+          responseText += `- Functions: ${counts.functions}\n`;
+          responseText += `- Ends: ${counts.ends}\n`;
+          responseText += `- If/then: ${counts.ifs}\n`;
+          responseText += `- For/do: ${counts.fors}\n`;
+          responseText += `- While/do: ${counts.whiles}\n`;
+          responseText += `- Accolades: ${counts.openBraces} ouvertes, ${counts.closeBraces} fermées\n`;
+          break;
+
+        case "count_blocks":
+          if (!scriptPath) {
+            throw new Error("scriptPath requis pour count_blocks");
+          }
+          const fullPath2 = path.join(this.projectRoot, scriptPath);
+          const content2 = await fs.readFile(fullPath2, 'utf-8');
+          const counts2 = countSyntaxElements(content2);
+          
+          responseText = `## 📊 **Analyse des blocs: ${scriptPath}**\n\n`;
+          responseText += `- **Functions:** ${counts2.functions}\n`;
+          responseText += `- **End statements:** ${counts2.ends}\n`;
+          responseText += `- **If blocks:** ${counts2.ifs}\n`;
+          responseText += `- **For loops:** ${counts2.fors}\n`;
+          responseText += `- **While loops:** ${counts2.whiles}\n`;
+          responseText += `- **Repeat/until:** ${counts2.repeats}/${counts2.untils}\n`;
+          responseText += `- **Braces:** ${counts2.openBraces} { et ${counts2.closeBraces} }\n\n`;
+          
+          const expectedEnds = counts2.functions + counts2.ifs + counts2.fors + counts2.whiles;
+          if (counts2.ends !== expectedEnds) {
+            responseText += `⚠️ **Attention:** Attendu ${expectedEnds} 'end' mais trouvé ${counts2.ends}\n`;
+          } else {
+            responseText += `✅ **Tous les blocs sont correctement fermés**\n`;
+          }
+          break;
+
+        case "suggest_fix":
+          if (!errorMessage) {
+            throw new Error("errorMessage requis pour suggest_fix");
+          }
+          const suggestions = suggestSyntaxFixes("", errorMessage);
+          
+          responseText = `## 💡 **Suggestions pour l'erreur:**\n\n`;
+          responseText += `**Erreur:** ${errorMessage}\n\n`;
+          
+          if (suggestions.length > 0) {
+            responseText += "**Suggestions:**\n";
+            suggestions.forEach(suggestion => {
+              responseText += `- ${suggestion}\n`;
+            });
+          } else {
+            responseText += "Aucune suggestion spécifique pour cette erreur.\n";
+          }
+          
+          // Ajouter des conseils généraux
+          responseText += "\n**Conseils généraux:**\n";
+          responseText += "- Utilisez `read_script` pour voir le fichier complet\n";
+          responseText += "- Utilisez `syntax_helper action: 'count_blocks'` pour analyser les blocs\n";
+          responseText += "- Utilisez `preview_patch` avant d'appliquer des changements\n";
+          break;
+
+        case "show_rules":
+          responseText = `## 📜 **Règles de syntaxe pour Claude Desktop**\n\n`;
+          responseText += SYNTAX_RULES.MANDATORY_WORKFLOW + "\n\n";
+          responseText += SYNTAX_RULES.PATCH_BEST_PRACTICES + "\n\n";
+          responseText += "### 🚫 **Erreurs courantes à éviter:**\n\n";
+          SYNTAX_RULES.COMMON_MISTAKES.forEach((mistake, index) => {
+            responseText += `${index + 1}. **${mistake.pattern}**\n`;
+            responseText += `   ➡️ ${mistake.solution}\n\n`;
+          });
+          responseText += "\n### 📊 **Votre historique d'outils récents:**\n";
+          responseText += this.toolHistory.slice(-5).join(" → ") || "Aucun outil utilisé";
+          
+          // Ajouter un avertissement si le workflow n'est pas respecté
+          if (!compliance.compliant) {
+            responseText += `\n\n${compliance.message}`;
+          }
+          break;
+
+        default:
+          throw new Error(`Action '${action}' non reconnue`);
+      }
+    } catch (error) {
+      responseText = `❌ **Erreur:** ${error instanceof Error ? error.message : String(error)}`;
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: responseText,
+        },
+      ],
+    };
+  }
+
+  private getTemplateDescription(templateName: string): string {
+    const descriptions: { [key: string]: string } = {
+      addFunction: "Ajouter une nouvelle fonction",
+      addModuleMethod: "Ajouter une méthode à un module",
+      addEventHandler: "Ajouter un gestionnaire d'événement",
+      addConditional: "Ajouter un bloc conditionnel",
+      addLoop: "Ajouter une boucle for",
+      addWhileLoop: "Ajouter une boucle while",
+      addRemoteHandler: "Ajouter un gestionnaire RemoteEvent",
+      createModule: "Créer un nouveau module complet",
+      addServiceInit: "Initialiser un service Roblox",
+      addPlayerJoined: "Gérer l'arrivée d'un joueur"
+    };
+    return descriptions[templateName] || "Template de code";
+  }
+
+  private analyzeErrorMessage(
+    errorMessage: string,
+    filePath?: string,
+    lineNumber?: number
+  ) {
+    // Générer le rapport d'analyse automatique
+    const report = generateErrorAnalysisReport(errorMessage, filePath, lineNumber);
+    
+    // Ajouter des instructions spécifiques basées sur l'historique
+    let enhancedReport = report;
+    
+    // Vérifier si Claude a déjà essayé de corriger
+    const recentPatches = this.toolHistory.filter(tool => tool === 'patch_script').length;
+    if (recentPatches > 2) {
+      enhancedReport += `\n\n⚠️ **ATTENTION:** Vous avez déjà fait ${recentPatches} patches. `;
+      enhancedReport += `ARRÊTEZ de patcher et analysez d'abord le problème complètement.\n`;
+      enhancedReport += `Utilisez 'rollback_history' si nécessaire pour revenir en arrière.`;
+    }
+    
+    // Ajouter un avertissement si pas de lecture récente
+    const hasRecentRead = this.toolHistory.slice(-5).includes('read_script');
+    if (!hasRecentRead && filePath) {
+      enhancedReport += `\n\n🚨 **RAPPEL OBLIGATOIRE:**\n`;
+      enhancedReport += `Vous DEVEZ utiliser \`read_script("${filePath}")\` AVANT toute modification!`;
+    }
+    
+    // Forcer l'approche minimale
+    enhancedReport += `\n\n## 📏 Principe de correction MINIMAL:\n`;
+    enhancedReport += `1. **Identifier** exactement quelle ligne cause l'erreur\n`;
+    enhancedReport += `2. **Modifier** UNIQUEMENT cette ligne/ce bloc\n`;
+    enhancedReport += `3. **Valider** que l'erreur est résolue\n`;
+    enhancedReport += `4. **STOP** - Ne pas "améliorer" le code qui fonctionne\n`;
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: enhancedReport,
+        },
+      ],
+    };
   }
 
   async run() {

@@ -30,6 +30,60 @@ User: "Add a jump boost to the player"
 ### 🚨 SEARCH IS MANDATORY - NO EXCEPTIONS! 🚨
 If you write code without searching first, you are violating the core principle of this MCP server. The search tools exist to prevent errors and ensure code quality.
 
+## 🛠️ PATCH AND EDIT BEST PRACTICES
+
+### ⚠️ CRITICAL RULES FOR PATCHES ⚠️
+**To avoid syntax errors when patching code:**
+
+1. **ALWAYS read the ENTIRE file first** - Use `read_script()` to see full context
+2. **Count brackets and 'end' statements** - Every `function`, `if`, `for`, `while` needs its `end`
+3. **Use `preview_patch` FIRST** - Preview changes before applying
+4. **Check surrounding code** - Look 10 lines above/below your edit location
+5. **Validate after patching** - Use `validate_game` after modifications
+
+### Common Luau Syntax Rules:
+```luau
+-- Every opening needs a closing:
+function name()      -- needs 'end'
+if condition then    -- needs 'end'
+for i = 1, 10 do    -- needs 'end'
+while true do       -- needs 'end'
+repeat             -- needs 'until condition'
+
+-- Tables use braces:
+local table = {     -- needs '}'
+    key = value,    -- comma between items
+    key2 = value2   -- no comma on last item
+}                   -- closing brace
+
+-- Functions in tables:
+local module = {
+    MyFunction = function()  -- needs 'end' AND comma
+        -- code
+    end,                    -- comma after function
+    
+    AnotherFunction = function()
+        -- code
+    end                     -- no comma on last item
+}
+```
+
+### Patch Workflow Example:
+```
+User: "Add a new function to handle jumping"
+
+✅ CORRECT:
+1. read_script("src/server/main.server.luau")
+2. Count existing functions and their 'end' statements
+3. Find appropriate insertion point
+4. preview_patch with complete function including 'end'
+5. Apply patch
+6. validate_game to check syntax
+```
+
+### Auto-validation is enabled by default!
+The MCP server will automatically validate your changes after write_script or patch_script.
+
 ## Project Overview
 
 MCP-Roblox is a Model Context Protocol (MCP) server that enables Claude to interact with Roblox projects using **Rojo** for modern Luau development. The server provides real-time file watching, script management, and seamless integration between Claude and Roblox Studio.
